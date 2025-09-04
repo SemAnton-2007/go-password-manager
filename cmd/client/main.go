@@ -174,25 +174,85 @@ func showData(cl *client.Client, reader *bufio.Reader) {
 
 	if len(items) == 0 {
 		fmt.Println("У вас пока нет сохраненных данных")
+		fmt.Print("Нажмите Enter для возврата...")
+		reader.ReadString('\n')
 		return
 	}
 
-	fmt.Printf("Найдено %d элементов:\n", len(items))
+	fmt.Printf("\nНайдено %d элементов:\n", len(items))
 	for i, item := range items {
 		fmt.Printf("%d. %s (%s)\n", i+1, item.Name, getDataTypeName(item.Type))
-
-		decryptedData, err := decryptItemData(item, cl.GetUsername())
-		if err != nil {
-			fmt.Printf("   Ошибка декодирования: %v\n", err)
-		} else {
-			fmt.Printf("   Данные: %s\n", string(decryptedData))
-		}
-
-		fmt.Printf("   Обновлен: %s\n", item.UpdatedAt.Format("2006-01-02 15:04:05"))
-		fmt.Println()
 	}
 
-	fmt.Print("Нажмите Enter для возврата...")
+	fmt.Println("\nДействия:")
+	fmt.Println("0. Вернуться назад")
+	fmt.Println("1-9. Показать детали элемента")
+	fmt.Print("Ваш выбор [0]: ")
+
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+	if choice == "" || choice == "0" {
+		return
+	}
+
+	index, err := strconv.Atoi(choice)
+	if err != nil || index < 1 || index > len(items) {
+		fmt.Println("Неверный выбор элемента")
+		fmt.Print("Нажмите Enter для возврата...")
+		reader.ReadString('\n')
+		return
+	}
+
+	showItemDetails(items[index-1], cl.GetUsername(), reader)
+}
+
+func showItemDetails(item protocol.DataItem, password string, reader *bufio.Reader) {
+	fmt.Printf("\n=== Детали элемента: %s ===\n", item.Name)
+	fmt.Printf("Тип: %s\n", getDataTypeName(item.Type))
+	fmt.Printf("Создан: %s\n", item.CreatedAt.Format("2006-01-02 15:04:05"))
+	fmt.Printf("Обновлен: %s\n", item.UpdatedAt.Format("2006-01-02 15:04:05"))
+
+	decryptedData, err := decryptItemData(item, password)
+	if err != nil {
+		fmt.Printf("Ошибка декодирования: %v\n", err)
+		fmt.Print("Нажмите Enter для возврата...")
+		reader.ReadString('\n')
+		return
+	}
+
+	switch item.Type {
+	case protocol.DataTypeLoginPassword:
+		var loginData map[string]string
+		if err := json.Unmarshal(decryptedData, &loginData); err == nil {
+			fmt.Println("\n--- Учетные данные ---")
+			fmt.Printf("Логин: %s\n", loginData["login"])
+			fmt.Printf("Пароль: %s\n", loginData["password"])
+		} else {
+			fmt.Printf("Данные: %s\n", string(decryptedData))
+		}
+
+	case protocol.DataTypeText:
+		fmt.Println("\n--- Текстовые данные ---")
+		fmt.Println(string(decryptedData))
+
+	case protocol.DataTypeBankCard:
+		var cardData map[string]string
+		if err := json.Unmarshal(decryptedData, &cardData); err == nil {
+			fmt.Println("\n--- Данные банковской карты ---")
+			fmt.Printf("Номер карты: %s\n", cardData["number"])
+			fmt.Printf("Срок действия: %s\n", cardData["expiry"])
+			fmt.Printf("CVV: %s\n", cardData["cvv"])
+			fmt.Printf("Имя владельца: %s\n", cardData["holder"])
+		} else {
+			fmt.Printf("Данные: %s\n", string(decryptedData))
+		}
+
+	default:
+		fmt.Println("\n--- Данные ---")
+		fmt.Printf("%s\n", string(decryptedData))
+	}
+
+	fmt.Print("\nНажмите Enter для возврата...")
 	reader.ReadString('\n')
 }
 

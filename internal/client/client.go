@@ -230,3 +230,34 @@ func (c *Client) IsAuthenticated() bool {
 func (c *Client) GetUsername() string {
 	return c.username
 }
+
+func (c *Client) DeleteData(itemID string) error {
+	if !c.IsAuthenticated() {
+		return fmt.Errorf("not authenticated")
+	}
+
+	req := protocol.DeleteDataRequest{
+		ItemID: itemID,
+	}
+
+	data, err := protocol.SerializeDeleteDataRequest(req)
+	if err != nil {
+		return fmt.Errorf("failed to serialize request: %v", err)
+	}
+
+	response, err := c.sendAndReceive(protocol.MsgTypeDeleteDataRequest, data)
+	if err != nil {
+		return err
+	}
+
+	resp, err := protocol.DeserializeDeleteDataResponse(response)
+	if err != nil {
+		return fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("failed to delete data: %s", resp.Message)
+	}
+
+	return nil
+}

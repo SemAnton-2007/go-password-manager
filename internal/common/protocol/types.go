@@ -7,17 +7,19 @@ import (
 
 // Типы сообщений
 const (
-	MsgTypeAuthRequest      = 0x01
-	MsgTypeAuthResponse     = 0x02
-	MsgTypeRegisterRequest  = 0x03
-	MsgTypeRegisterResponse = 0x04
-	MsgTypeSyncRequest      = 0x05
-	MsgTypeSyncResponse     = 0x06
-	MsgTypeDataRequest      = 0x07
-	MsgTypeDataResponse     = 0x08
-	MsgTypeSaveDataRequest  = 0x09
-	MsgTypeSaveDataResponse = 0x0A
-	MsgTypeError            = 0xFF
+	MsgTypeAuthRequest        = 0x01
+	MsgTypeAuthResponse       = 0x02
+	MsgTypeRegisterRequest    = 0x03
+	MsgTypeRegisterResponse   = 0x04
+	MsgTypeSyncRequest        = 0x05
+	MsgTypeSyncResponse       = 0x06
+	MsgTypeDataRequest        = 0x07
+	MsgTypeDataResponse       = 0x08
+	MsgTypeSaveDataRequest    = 0x09
+	MsgTypeSaveDataResponse   = 0x0A
+	MsgTypeError              = 0xFF
+	MsgTypeDeleteDataRequest  = 0x0B
+	MsgTypeDeleteDataResponse = 0x0C
 )
 
 // Типы данных
@@ -110,5 +112,14 @@ type SaveDataResponse struct {
 
 type ErrorResponse struct {
 	Code    uint16
+	Message string
+}
+
+type DeleteDataRequest struct {
+	ItemID string
+}
+
+type DeleteDataResponse struct {
+	Success bool
 	Message string
 }

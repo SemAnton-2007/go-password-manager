@@ -69,6 +69,8 @@ func (h *ClientHandler) handleMessage(msgType uint8, data []byte) {
 		h.handleDataRequest(data)
 	case protocol.MsgTypeSaveDataRequest:
 		h.handleSaveDataRequest(data)
+	case protocol.MsgTypeDeleteDataRequest:
+		h.handleDeleteDataRequest(data)
 	default:
 		h.sendError("Unknown message type")
 	}
@@ -241,6 +243,8 @@ func (h *ClientHandler) sendResponse(msgType uint8, data interface{}) {
 		serialized, err = json.Marshal(v)
 	case protocol.SaveDataResponse:
 		serialized, err = protocol.SerializeSaveDataResponse(v)
+	case protocol.DeleteDataResponse:
+		serialized, err = protocol.SerializeDeleteDataResponse(v)
 	default:
 		h.sendError("Unknown response type")
 		return
@@ -283,4 +287,34 @@ func (h *ClientHandler) sendError(message string) {
 	if err != nil {
 		log.Printf("Error sending error: %v", err)
 	}
+}
+
+func (h *ClientHandler) handleDeleteDataRequest(data []byte) {
+	if h.userID == 0 {
+		h.sendError("Not authenticated")
+		return
+	}
+
+	req, err := protocol.DeserializeDeleteDataRequest(data)
+	if err != nil {
+		log.Printf("Error deserializing delete data request: %v", err)
+		h.sendError("Invalid delete data request format")
+		return
+	}
+
+	log.Printf("Delete data request from user %s for item: %s", h.username, req.ItemID)
+
+	err = h.db.DeleteData(h.userID, req.ItemID)
+	if err != nil {
+		log.Printf("Error deleting data: %v", err)
+		h.sendError(fmt.Sprintf("Failed to delete data: %v", err))
+		return
+	}
+
+	resp := protocol.DeleteDataResponse{
+		Success: true,
+		Message: "Data deleted successfully",
+	}
+	h.sendResponse(protocol.MsgTypeDeleteDataResponse, resp)
+	log.Printf("Deleted data for user %s: %s", h.username, req.ItemID)
 }

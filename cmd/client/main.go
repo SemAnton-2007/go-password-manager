@@ -203,10 +203,10 @@ func showData(cl *client.Client, reader *bufio.Reader) {
 		return
 	}
 
-	showItemDetails(items[index-1], cl.GetUsername(), reader)
+	showItemDetails(items[index-1], cl.GetUsername(), reader, cl)
 }
 
-func showItemDetails(item protocol.DataItem, password string, reader *bufio.Reader) {
+func showItemDetails(item protocol.DataItem, password string, reader *bufio.Reader, cl *client.Client) {
 	fmt.Printf("\n=== Детали элемента: %s ===\n", item.Name)
 	fmt.Printf("Тип: %s\n", getDataTypeName(item.Type))
 	fmt.Printf("Создан: %s\n", item.CreatedAt.Format("2006-01-02 15:04:05"))
@@ -252,7 +252,44 @@ func showItemDetails(item protocol.DataItem, password string, reader *bufio.Read
 		fmt.Printf("%s\n", string(decryptedData))
 	}
 
-	fmt.Print("\nНажмите Enter для возврата...")
+	fmt.Println("\nДействия:")
+	fmt.Println("0. Вернуться назад")
+	fmt.Println("1. Удалить элемент")
+	fmt.Print("Ваш выбор [0]: ")
+
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+	if choice == "" || choice == "0" {
+		return
+	}
+
+	switch choice {
+	case "1":
+		deleteItem(item.ID, cl, reader)
+	default:
+		fmt.Println("Неверный выбор")
+	}
+}
+
+func deleteItem(itemID string, cl *client.Client, reader *bufio.Reader) {
+	fmt.Print("\nВы уверены, что хотите удалить этот элемент? (y/N): ")
+	confirm, _ := reader.ReadString('\n')
+	confirm = strings.TrimSpace(strings.ToLower(confirm))
+
+	if confirm != "y" && confirm != "yes" {
+		fmt.Println("Удаление отменено")
+		return
+	}
+
+	fmt.Println("Удаляем элемент...")
+	err := cl.DeleteData(itemID)
+	if err != nil {
+		fmt.Printf("Ошибка удаления: %v\n", err)
+	} else {
+		fmt.Println("Элемент успешно удален!")
+	}
+
+	fmt.Print("Нажмите Enter для продолжения...")
 	reader.ReadString('\n')
 }
 

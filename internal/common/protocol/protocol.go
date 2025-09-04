@@ -229,3 +229,23 @@ func DeserializeErrorResponse(data []byte) (ErrorResponse, error) {
 	err := json.Unmarshal(data, &resp)
 	return resp, err
 }
+
+func SerializeDeleteDataRequest(req DeleteDataRequest) ([]byte, error) {
+	return json.Marshal(req)
+}
+
+func DeserializeDeleteDataRequest(data []byte) (DeleteDataRequest, error) {
+	var req DeleteDataRequest
+	err := json.Unmarshal(data, &req)
+	return req, err
+}
+
+func SerializeDeleteDataResponse(resp DeleteDataResponse) ([]byte, error) {
+	return json.Marshal(resp)
+}
+
+func DeserializeDeleteDataResponse(data []byte) (DeleteDataResponse, error) {
+	var resp DeleteDataResponse
+	err := json.Unmarshal(data, &resp)
+	return resp, err
+}

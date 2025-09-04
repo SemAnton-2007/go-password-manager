@@ -3,8 +3,8 @@ package server
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log"
+	"path/filepath"
 	"time"
 
 	"password-manager/internal/common/crypto"
@@ -32,6 +32,18 @@ func NewDatabase(connStr string) (*Database, error) {
 
 func (d *Database) Close() error {
 	return d.db.Close()
+}
+
+func (d *Database) RunMigrations() error {
+	dir, err := filepath.Abs(filepath.Dir("."))
+	if err != nil {
+		return err
+	}
+
+	migrationsDir := filepath.Join(dir, "migrations")
+
+	migrationManager := NewMigrationManager(d.db, migrationsDir)
+	return migrationManager.RunMigrations()
 }
 
 func (d *Database) CreateUser(username, password string) error {
@@ -168,43 +180,6 @@ func (d *Database) DeleteData(userID int, itemID string) error {
 		userID, itemID,
 	)
 	return err
-}
-
-func (d *Database) RunMigrations() error {
-	migrations := []string{
-		`CREATE TABLE IF NOT EXISTS users (
-			id SERIAL PRIMARY KEY,
-			username VARCHAR(255) UNIQUE NOT NULL,
-			password_hash TEXT NOT NULL,
-			password_salt TEXT NOT NULL,
-			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		)`,
-
-		`CREATE TABLE IF NOT EXISTS user_data (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-			data_type SMALLINT NOT NULL,
-			name VARCHAR(255) NOT NULL,
-			data BYTEA NOT NULL,
-			metadata JSONB DEFAULT '{}'::jsonb,
-			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		)`,
-
-		`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`,
-		`CREATE INDEX IF NOT EXISTS idx_user_data_user_id ON user_data(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_user_data_updated_at ON user_data(updated_at)`,
-	}
-
-	for i, migration := range migrations {
-		_, err := d.db.Exec(migration)
-		if err != nil {
-			return fmt.Errorf("migration %d failed: %v", i+1, err)
-		}
-	}
-
-	return nil
 }
 
 func (d *Database) UpdateData(userID int, itemID string, item protocol.NewDataItem) error {

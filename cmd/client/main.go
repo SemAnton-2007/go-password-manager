@@ -255,6 +255,7 @@ func showItemDetails(item protocol.DataItem, password string, reader *bufio.Read
 	fmt.Println("\nДействия:")
 	fmt.Println("0. Вернуться назад")
 	fmt.Println("1. Удалить элемент")
+	fmt.Println("2. Редактировать элемент")
 	fmt.Print("Ваш выбор [0]: ")
 
 	choice, _ := reader.ReadString('\n')
@@ -266,9 +267,127 @@ func showItemDetails(item protocol.DataItem, password string, reader *bufio.Read
 	switch choice {
 	case "1":
 		deleteItem(item.ID, cl, reader)
+	case "2":
+		editItem(item, password, cl, reader)
 	default:
 		fmt.Println("Неверный выбор")
 	}
+}
+
+func editItem(item protocol.DataItem, password string, cl *client.Client, reader *bufio.Reader) {
+	fmt.Printf("\n=== Редактирование элемента: %s ===\n", item.Name)
+
+	decryptedData, err := decryptItemData(item, password)
+	if err != nil {
+		fmt.Printf("Ошибка декодирования: %v\n", err)
+		fmt.Print("Нажмите Enter для возврата...")
+		reader.ReadString('\n')
+		return
+	}
+
+	var newData string
+
+	switch item.Type {
+	case protocol.DataTypeLoginPassword:
+		var loginData map[string]string
+		if err := json.Unmarshal(decryptedData, &loginData); err == nil {
+			fmt.Printf("Текущий логин [%s]: ", loginData["login"])
+			login, _ := reader.ReadString('\n')
+			login = strings.TrimSpace(login)
+			if login != "" {
+				loginData["login"] = login
+			}
+
+			fmt.Printf("Текущий пароль [%s]: ", loginData["password"])
+			password, _ := reader.ReadString('\n')
+			password = strings.TrimSpace(password)
+			if password != "" {
+				loginData["password"] = password
+			}
+
+			jsonData, _ := json.Marshal(loginData)
+			newData = string(jsonData)
+		}
+
+	case protocol.DataTypeText:
+		fmt.Printf("Текущий текст:\n%s\n", string(decryptedData))
+		fmt.Println("Введите новый текст (оставьте пустым для отмены):")
+		text, _ := reader.ReadString('\n')
+		text = strings.TrimSpace(text)
+		if text != "" {
+			newData = text
+		} else {
+			fmt.Println("Редактирование отменено")
+			return
+		}
+
+	case protocol.DataTypeBankCard:
+		var cardData map[string]string
+		if err := json.Unmarshal(decryptedData, &cardData); err == nil {
+			fmt.Printf("Текущий номер карты [%s]: ", cardData["number"])
+			number, _ := reader.ReadString('\n')
+			number = strings.TrimSpace(number)
+			if number != "" {
+				cardData["number"] = number
+			}
+
+			fmt.Printf("Текущий срок действия [%s]: ", cardData["expiry"])
+			expiry, _ := reader.ReadString('\n')
+			expiry = strings.TrimSpace(expiry)
+			if expiry != "" {
+				cardData["expiry"] = expiry
+			}
+
+			fmt.Printf("Текущий CVV [%s]: ", cardData["cvv"])
+			cvv, _ := reader.ReadString('\n')
+			cvv = strings.TrimSpace(cvv)
+			if cvv != "" {
+				cardData["cvv"] = cvv
+			}
+
+			fmt.Printf("Текущий владелец [%s]: ", cardData["holder"])
+			holder, _ := reader.ReadString('\n')
+			holder = strings.TrimSpace(holder)
+			if holder != "" {
+				cardData["holder"] = holder
+			}
+
+			jsonData, _ := json.Marshal(cardData)
+			newData = string(jsonData)
+		}
+
+	default:
+		fmt.Println("Редактирование данного типа данных не поддерживается")
+		return
+	}
+
+	if newData == "" {
+		fmt.Println("Данные не изменены")
+		return
+	}
+
+	encryptedData, err := encryptData([]byte(newData), cl.GetUsername())
+	if err != nil {
+		fmt.Printf("Ошибка шифрования данных: %v\n", err)
+		return
+	}
+
+	updatedItem := protocol.NewDataItem{
+		Type:     item.Type,
+		Name:     item.Name,
+		Data:     encryptedData,
+		Metadata: item.Metadata,
+	}
+
+	fmt.Println("Обновляем данные на сервере...")
+	if err := cl.UpdateData(item.ID, updatedItem); err != nil {
+		fmt.Printf("Ошибка обновления: %v\n", err)
+	} else {
+		fmt.Println("Данные успешно обновлены!")
+	}
+
+	fmt.Print("Нажмите Enter для продолжения...")
+	reader.ReadString('\n')
 }
 
 func deleteItem(itemID string, cl *client.Client, reader *bufio.Reader) {

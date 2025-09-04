@@ -20,6 +20,8 @@ const (
 	MsgTypeError              = 0xFF
 	MsgTypeDeleteDataRequest  = 0x0B
 	MsgTypeDeleteDataResponse = 0x0C
+	MsgTypeUpdateDataRequest  = 0x0D
+	MsgTypeUpdateDataResponse = 0x0E
 )
 
 // Типы данных
@@ -120,6 +122,16 @@ type DeleteDataRequest struct {
 }
 
 type DeleteDataResponse struct {
+	Success bool
+	Message string
+}
+
+type UpdateDataRequest struct {
+	ItemID string
+	Item   NewDataItem
+}
+
+type UpdateDataResponse struct {
 	Success bool
 	Message string
 }

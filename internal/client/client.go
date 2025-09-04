@@ -261,3 +261,35 @@ func (c *Client) DeleteData(itemID string) error {
 
 	return nil
 }
+
+func (c *Client) UpdateData(itemID string, item protocol.NewDataItem) error {
+	if !c.IsAuthenticated() {
+		return fmt.Errorf("not authenticated")
+	}
+
+	req := protocol.UpdateDataRequest{
+		ItemID: itemID,
+		Item:   item,
+	}
+
+	data, err := protocol.SerializeUpdateDataRequest(req)
+	if err != nil {
+		return fmt.Errorf("failed to serialize request: %v", err)
+	}
+
+	response, err := c.sendAndReceive(protocol.MsgTypeUpdateDataRequest, data)
+	if err != nil {
+		return err
+	}
+
+	resp, err := protocol.DeserializeUpdateDataResponse(response)
+	if err != nil {
+		return fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("failed to update data: %s", resp.Message)
+	}
+
+	return nil
+}

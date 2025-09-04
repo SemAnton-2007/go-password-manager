@@ -161,40 +161,40 @@ func DeserializeDataItem(data []byte) (DataItem, error) {
 }
 
 func SerializeSaveDataRequest(req SaveDataRequest) ([]byte, error) {
-	type newDataItem struct {
+	type tempDataItem struct {
 		Type     uint8             `json:"type"`
 		Name     string            `json:"name"`
 		Data     []byte            `json:"data"`
 		Metadata map[string]string `json:"metadata"`
 	}
 
-	type saveDataRequest struct {
-		Item newDataItem `json:"item"`
+	type tempRequest struct {
+		Item tempDataItem `json:"item"`
 	}
 
-	temp := newDataItem{
+	temp := tempDataItem{
 		Type:     req.Item.Type,
 		Name:     req.Item.Name,
 		Data:     req.Item.Data,
 		Metadata: req.Item.Metadata,
 	}
 
-	return json.Marshal(saveDataRequest{Item: temp})
+	return json.Marshal(tempRequest{Item: temp})
 }
 
 func DeserializeSaveDataRequest(data []byte) (SaveDataRequest, error) {
-	type newDataItem struct {
+	type tempDataItem struct {
 		Type     uint8             `json:"type"`
 		Name     string            `json:"name"`
 		Data     []byte            `json:"data"`
 		Metadata map[string]string `json:"metadata"`
 	}
 
-	type saveDataRequest struct {
-		Item newDataItem `json:"item"`
+	type tempRequest struct {
+		Item tempDataItem `json:"item"`
 	}
 
-	var temp saveDataRequest
+	var temp tempRequest
 	err := json.Unmarshal(data, &temp)
 	if err != nil {
 		return SaveDataRequest{}, err
@@ -246,6 +246,72 @@ func SerializeDeleteDataResponse(resp DeleteDataResponse) ([]byte, error) {
 
 func DeserializeDeleteDataResponse(data []byte) (DeleteDataResponse, error) {
 	var resp DeleteDataResponse
+	err := json.Unmarshal(data, &resp)
+	return resp, err
+}
+
+func SerializeUpdateDataRequest(req UpdateDataRequest) ([]byte, error) {
+	type tempDataItem struct {
+		Type     uint8             `json:"type"`
+		Name     string            `json:"name"`
+		Data     []byte            `json:"data"`
+		Metadata map[string]string `json:"metadata"`
+	}
+
+	type tempRequest struct {
+		ItemID string       `json:"item_id"`
+		Item   tempDataItem `json:"item"`
+	}
+
+	temp := tempRequest{
+		ItemID: req.ItemID,
+		Item: tempDataItem{
+			Type:     req.Item.Type,
+			Name:     req.Item.Name,
+			Data:     req.Item.Data,
+			Metadata: req.Item.Metadata,
+		},
+	}
+
+	return json.Marshal(temp)
+}
+
+func DeserializeUpdateDataRequest(data []byte) (UpdateDataRequest, error) {
+	type tempDataItem struct {
+		Type     uint8             `json:"type"`
+		Name     string            `json:"name"`
+		Data     []byte            `json:"data"`
+		Metadata map[string]string `json:"metadata"`
+	}
+
+	type tempRequest struct {
+		ItemID string       `json:"item_id"`
+		Item   tempDataItem `json:"item"`
+	}
+
+	var temp tempRequest
+	err := json.Unmarshal(data, &temp)
+	if err != nil {
+		return UpdateDataRequest{}, err
+	}
+
+	return UpdateDataRequest{
+		ItemID: temp.ItemID,
+		Item: NewDataItem{
+			Type:     temp.Item.Type,
+			Name:     temp.Item.Name,
+			Data:     temp.Item.Data,
+			Metadata: temp.Item.Metadata,
+		},
+	}, nil
+}
+
+func SerializeUpdateDataResponse(resp UpdateDataResponse) ([]byte, error) {
+	return json.Marshal(resp)
+}
+
+func DeserializeUpdateDataResponse(data []byte) (UpdateDataResponse, error) {
+	var resp UpdateDataResponse
 	err := json.Unmarshal(data, &resp)
 	return resp, err
 }

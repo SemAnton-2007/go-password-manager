@@ -71,6 +71,8 @@ func (h *ClientHandler) handleMessage(msgType uint8, data []byte) {
 		h.handleSaveDataRequest(data)
 	case protocol.MsgTypeDeleteDataRequest:
 		h.handleDeleteDataRequest(data)
+	case protocol.MsgTypeUpdateDataRequest:
+		h.handleUpdateDataRequest(data)
 	default:
 		h.sendError("Unknown message type")
 	}
@@ -245,6 +247,8 @@ func (h *ClientHandler) sendResponse(msgType uint8, data interface{}) {
 		serialized, err = protocol.SerializeSaveDataResponse(v)
 	case protocol.DeleteDataResponse:
 		serialized, err = protocol.SerializeDeleteDataResponse(v)
+	case protocol.UpdateDataResponse:
+		serialized, err = protocol.SerializeUpdateDataResponse(v)
 	default:
 		h.sendError("Unknown response type")
 		return
@@ -317,4 +321,34 @@ func (h *ClientHandler) handleDeleteDataRequest(data []byte) {
 	}
 	h.sendResponse(protocol.MsgTypeDeleteDataResponse, resp)
 	log.Printf("Deleted data for user %s: %s", h.username, req.ItemID)
+}
+
+func (h *ClientHandler) handleUpdateDataRequest(data []byte) {
+	if h.userID == 0 {
+		h.sendError("Not authenticated")
+		return
+	}
+
+	req, err := protocol.DeserializeUpdateDataRequest(data)
+	if err != nil {
+		log.Printf("Error deserializing update data request: %v", err)
+		h.sendError("Invalid update data request format")
+		return
+	}
+
+	log.Printf("Update data request from user %s for item: %s", h.username, req.ItemID)
+
+	err = h.db.UpdateData(h.userID, req.ItemID, req.Item)
+	if err != nil {
+		log.Printf("Error updating data: %v", err)
+		h.sendError(fmt.Sprintf("Failed to update data: %v", err))
+		return
+	}
+
+	resp := protocol.UpdateDataResponse{
+		Success: true,
+		Message: "Data updated successfully",
+	}
+	h.sendResponse(protocol.MsgTypeUpdateDataResponse, resp)
+	log.Printf("Updated data for user %s: %s", h.username, req.ItemID)
 }

@@ -206,3 +206,21 @@ func (d *Database) RunMigrations() error {
 
 	return nil
 }
+
+func (d *Database) UpdateData(userID int, itemID string, item protocol.NewDataItem) error {
+	metadataJSON, err := json.Marshal(item.Metadata)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Updating data for user %d, item %s: type=%d, name=%s, data_len=%d",
+		userID, itemID, item.Type, item.Name, len(item.Data))
+
+	_, err = d.db.Exec(`
+		UPDATE user_data 
+		SET data_type = $1, name = $2, data = $3, metadata = $4, updated_at = CURRENT_TIMESTAMP
+		WHERE user_id = $5 AND id = $6
+	`, item.Type, item.Name, item.Data, metadataJSON, userID, itemID)
+
+	return err
+}

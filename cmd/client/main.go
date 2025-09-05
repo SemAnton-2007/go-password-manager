@@ -5,7 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -212,50 +214,67 @@ func showItemDetails(item protocol.DataItem, password string, reader *bufio.Read
 	fmt.Printf("Создан: %s\n", item.CreatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Printf("Обновлен: %s\n", item.UpdatedAt.Format("2006-01-02 15:04:05"))
 
-	decryptedData, err := decryptItemData(item, password)
-	if err != nil {
-		fmt.Printf("Ошибка декодирования: %v\n", err)
-		fmt.Print("Нажмите Enter для возврата...")
-		reader.ReadString('\n')
-		return
-	}
-
 	switch item.Type {
-	case protocol.DataTypeLoginPassword:
-		var loginData map[string]string
-		if err := json.Unmarshal(decryptedData, &loginData); err == nil {
-			fmt.Println("\n--- Учетные данные ---")
-			fmt.Printf("Логин: %s\n", loginData["login"])
-			fmt.Printf("Пароль: %s\n", loginData["password"])
-		} else {
-			fmt.Printf("Данные: %s\n", string(decryptedData))
+	case protocol.DataTypeBinary:
+		// Для бинарных данных показываем информацию о файле
+		fmt.Println("\n--- Информация о файле ---")
+		if filename, ok := item.Metadata[protocol.MetaOriginalFileName]; ok {
+			fmt.Printf("Имя файла: %s\n", filename)
 		}
-
-	case protocol.DataTypeText:
-		fmt.Println("\n--- Текстовые данные ---")
-		fmt.Println(string(decryptedData))
-
-	case protocol.DataTypeBankCard:
-		var cardData map[string]string
-		if err := json.Unmarshal(decryptedData, &cardData); err == nil {
-			fmt.Println("\n--- Данные банковской карты ---")
-			fmt.Printf("Номер карты: %s\n", cardData["number"])
-			fmt.Printf("Срок действия: %s\n", cardData["expiry"])
-			fmt.Printf("CVV: %s\n", cardData["cvv"])
-			fmt.Printf("Имя владельца: %s\n", cardData["holder"])
-		} else {
-			fmt.Printf("Данные: %s\n", string(decryptedData))
+		if size, ok := item.Metadata[protocol.MetaFileSize]; ok {
+			fmt.Printf("Размер: %s байт\n", size)
+		}
+		if ext, ok := item.Metadata[protocol.MetaFileExtension]; ok {
+			fmt.Printf("Расширение: %s\n", ext)
 		}
 
 	default:
-		fmt.Println("\n--- Данные ---")
-		fmt.Printf("%s\n", string(decryptedData))
+		// Для других типов данных дешифруем и показываем содержимое
+		decryptedData, err := decryptItemData(item, password)
+		if err != nil {
+			fmt.Printf("Ошибка декодирования: %v\n", err)
+			fmt.Print("Нажмите Enter для возврата...")
+			reader.ReadString('\n')
+			return
+		}
+
+		switch item.Type {
+		case protocol.DataTypeLoginPassword:
+			var loginData map[string]string
+			if err := json.Unmarshal(decryptedData, &loginData); err == nil {
+				fmt.Println("\n--- Учетные данные ---")
+				fmt.Printf("Логин: %s\n", loginData["login"])
+				fmt.Printf("Пароль: %s\n", loginData["password"])
+			} else {
+				fmt.Printf("Данные: %s\n", string(decryptedData))
+			}
+
+		case protocol.DataTypeText:
+			fmt.Println("\n--- Текстовые данные ---")
+			fmt.Println(string(decryptedData))
+
+		case protocol.DataTypeBankCard:
+			var cardData map[string]string
+			if err := json.Unmarshal(decryptedData, &cardData); err == nil {
+				fmt.Println("\n--- Данные банковской карты ---")
+				fmt.Printf("Номер карты: %s\n", cardData["number"])
+				fmt.Printf("Срок действия: %s\n", cardData["expiry"])
+				fmt.Printf("CVV: %s\n", cardData["cvv"])
+				fmt.Printf("Имя владельца: %s\n", cardData["holder"])
+			} else {
+				fmt.Printf("Данные: %s\n", string(decryptedData))
+			}
+		}
 	}
 
 	fmt.Println("\nДействия:")
 	fmt.Println("0. Вернуться назад")
 	fmt.Println("1. Удалить элемент")
-	fmt.Println("2. Редактировать элемент")
+	if item.Type == protocol.DataTypeBinary {
+		fmt.Println("2. Скачать файл")
+	} else {
+		fmt.Println("2. Редактировать элемент")
+	}
 	fmt.Print("Ваш выбор [0]: ")
 
 	choice, _ := reader.ReadString('\n')
@@ -268,10 +287,66 @@ func showItemDetails(item protocol.DataItem, password string, reader *bufio.Read
 	case "1":
 		deleteItem(item.ID, cl, reader)
 	case "2":
-		editItem(item, password, cl, reader)
+		if item.Type == protocol.DataTypeBinary {
+			downloadFile(item, cl, reader)
+		} else {
+			editItem(item, password, cl, reader)
+		}
 	default:
 		fmt.Println("Неверный выбор")
 	}
+}
+
+func downloadFile(item protocol.DataItem, cl *client.Client, reader *bufio.Reader) {
+	fmt.Println("\n=== Скачивание файла ===")
+
+	fmt.Println("Загружаем файл...")
+	fileData, err := cl.DownloadData(item.ID)
+	if err != nil {
+		fmt.Printf("Ошибка загрузки: %v\n", err)
+		fmt.Print("Нажмите Enter для возврата...")
+		reader.ReadString('\n')
+		return
+	}
+
+	decryptedData, err := decryptData(fileData, cl.GetUsername())
+	if err != nil {
+		fmt.Printf("Ошибка расшифровки: %v\n", err)
+		fmt.Print("Нажмите Enter для возврата...")
+		reader.ReadString('\n')
+		return
+	}
+
+	originalName, ok := item.Metadata[protocol.MetaOriginalFileName]
+	if !ok {
+		originalName = item.Name
+	}
+
+	fmt.Printf("Введите путь для сохранения файла [./%s]: ", originalName)
+	savePath, _ := reader.ReadString('\n')
+	savePath = strings.TrimSpace(savePath)
+	if savePath == "" {
+		savePath = "./" + originalName
+	}
+
+	dir := filepath.Dir(savePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		fmt.Printf("Ошибка создания директории: %v\n", err)
+		fmt.Print("Нажмите Enter для возврата...")
+		reader.ReadString('\n')
+		return
+	}
+
+	if err := ioutil.WriteFile(savePath, decryptedData, 0644); err != nil {
+		fmt.Printf("Ошибка сохранения файла: %v\n", err)
+		fmt.Print("Нажмите Enter для возврата...")
+		reader.ReadString('\n')
+		return
+	}
+
+	fmt.Printf("Файл успешно сохранен: %s (%d байт)\n", savePath, len(decryptedData))
+	fmt.Print("Нажмите Enter для продолжения...")
+	reader.ReadString('\n')
 }
 
 func editItem(item protocol.DataItem, password string, cl *client.Client, reader *bufio.Reader) {
@@ -418,7 +493,8 @@ func createNewItem(cl *client.Client, reader *bufio.Reader) {
 	fmt.Println("Выберите тип данных:")
 	fmt.Println("1. Логин/Пароль")
 	fmt.Println("2. Текстовые данные")
-	fmt.Println("3. Банковская карта")
+	fmt.Println("3. Бинарные данные (файл)")
+	fmt.Println("4. Банковская карта")
 	fmt.Print("Ваш выбор [1]: ")
 
 	typeChoice, _ := reader.ReadString('\n')
@@ -434,6 +510,8 @@ func createNewItem(cl *client.Client, reader *bufio.Reader) {
 	case "2":
 		dataType = protocol.DataTypeText
 	case "3":
+		dataType = protocol.DataTypeBinary
+	case "4":
 		dataType = protocol.DataTypeBankCard
 	default:
 		fmt.Println("Неверный выбор типа данных")
@@ -448,7 +526,9 @@ func createNewItem(cl *client.Client, reader *bufio.Reader) {
 		return
 	}
 
-	var data string
+	var data []byte
+	var metadata map[string]string = make(map[string]string)
+
 	switch dataType {
 	case protocol.DataTypeLoginPassword:
 		fmt.Print("Введите логин: ")
@@ -464,13 +544,45 @@ func createNewItem(cl *client.Client, reader *bufio.Reader) {
 			"password": password,
 		}
 		jsonData, _ := json.Marshal(loginData)
-		data = string(jsonData)
+		data = jsonData
 
 	case protocol.DataTypeText:
 		fmt.Print("Введите текст: ")
 		text, _ := reader.ReadString('\n')
 		text = strings.TrimSpace(text)
-		data = text
+		data = []byte(text)
+
+	case protocol.DataTypeBinary:
+		fmt.Print("Введите путь к файлу: ")
+		filePath, _ := reader.ReadString('\n')
+		filePath = strings.TrimSpace(filePath)
+		if filePath == "" {
+			fmt.Println("Путь к файлу не может быть пустым")
+			return
+		}
+
+		fileInfo, err := os.Stat(filePath)
+		if err != nil {
+			fmt.Printf("Ошибка получения информации о файле: %v\n", err)
+			return
+		}
+
+		if fileInfo.Size() > 500*1024 {
+			fmt.Printf("Файл слишком большой (%d bytes). Максимальный размер: 500КB\n", fileInfo.Size())
+			return
+		}
+
+		fileData, err := ioutil.ReadFile(filePath)
+		if err != nil {
+			fmt.Printf("Ошибка чтения файла: %v\n", err)
+			return
+		}
+
+		data = fileData
+
+		metadata[protocol.MetaOriginalFileName] = filepath.Base(filePath)
+		metadata[protocol.MetaFileSize] = fmt.Sprintf("%d", len(fileData))
+		metadata[protocol.MetaFileExtension] = filepath.Ext(filePath)
 
 	case protocol.DataTypeBankCard:
 		fmt.Print("Введите номер карта: ")
@@ -496,10 +608,10 @@ func createNewItem(cl *client.Client, reader *bufio.Reader) {
 			"holder": holder,
 		}
 		jsonData, _ := json.Marshal(cardData)
-		data = string(jsonData)
+		data = jsonData
 	}
 
-	encryptedData, err := encryptData([]byte(data), cl.GetUsername())
+	encryptedData, err := encryptData(data, cl.GetUsername())
 	if err != nil {
 		fmt.Printf("Ошибка шифрования данных: %v\n", err)
 		return
@@ -509,7 +621,7 @@ func createNewItem(cl *client.Client, reader *bufio.Reader) {
 		Type:     dataType,
 		Name:     name,
 		Data:     encryptedData,
-		Metadata: make(map[string]string),
+		Metadata: metadata,
 	}
 
 	fmt.Println("Сохраняем данные на сервере...")
@@ -524,6 +636,11 @@ func createNewItem(cl *client.Client, reader *bufio.Reader) {
 func encryptData(data []byte, password string) ([]byte, error) {
 	key := deriveSimpleKey(password)
 	return crypto.Encrypt(data, key)
+}
+
+func decryptData(data []byte, password string) ([]byte, error) {
+	key := deriveSimpleKey(password)
+	return crypto.Decrypt(data, key)
 }
 
 func decryptItemData(item protocol.DataItem, password string) ([]byte, error) {

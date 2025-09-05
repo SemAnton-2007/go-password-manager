@@ -29,7 +29,7 @@ func NewClientHandler(conn net.Conn, db *Database) *ClientHandler {
 func (h *ClientHandler) Handle() {
 	defer h.conn.Close()
 
-	buffer := make([]byte, 4096)
+	buffer := make([]byte, 50*1024*1024)
 
 	for {
 		n, err := h.conn.Read(buffer)
@@ -73,6 +73,8 @@ func (h *ClientHandler) handleMessage(msgType uint8, data []byte) {
 		h.handleDeleteDataRequest(data)
 	case protocol.MsgTypeUpdateDataRequest:
 		h.handleUpdateDataRequest(data)
+	case protocol.MsgTypeDownloadRequest:
+		h.handleDownloadRequest(data)
 	default:
 		h.sendError("Unknown message type")
 	}
@@ -249,6 +251,8 @@ func (h *ClientHandler) sendResponse(msgType uint8, data interface{}) {
 		serialized, err = protocol.SerializeDeleteDataResponse(v)
 	case protocol.UpdateDataResponse:
 		serialized, err = protocol.SerializeUpdateDataResponse(v)
+	case protocol.DownloadResponse:
+		serialized, err = protocol.SerializeDownloadResponse(v)
 	default:
 		h.sendError("Unknown response type")
 		return
@@ -351,4 +355,35 @@ func (h *ClientHandler) handleUpdateDataRequest(data []byte) {
 	}
 	h.sendResponse(protocol.MsgTypeUpdateDataResponse, resp)
 	log.Printf("Updated data for user %s: %s", h.username, req.ItemID)
+}
+
+func (h *ClientHandler) handleDownloadRequest(data []byte) {
+	if h.userID == 0 {
+		h.sendError("Not authenticated")
+		return
+	}
+
+	req, err := protocol.DeserializeDownloadRequest(data)
+	if err != nil {
+		log.Printf("Error deserializing download request: %v", err)
+		h.sendError("Invalid download request format")
+		return
+	}
+
+	log.Printf("Download request from user %s for item: %s", h.username, req.ItemID)
+
+	item, err := h.db.GetDataByID(h.userID, req.ItemID)
+	if err != nil {
+		log.Printf("Error getting data by ID: %v", err)
+		h.sendError("Data not found")
+		return
+	}
+
+	resp := protocol.DownloadResponse{
+		Success: true,
+		Data:    item.Data,
+		Message: "Download successful",
+	}
+	h.sendResponse(protocol.MsgTypeDownloadResponse, resp)
+	log.Printf("Sent download data for user %s: %s (%d bytes)", h.username, req.ItemID, len(item.Data))
 }

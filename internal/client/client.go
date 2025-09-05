@@ -3,6 +3,7 @@ package client
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"time"
 
@@ -54,19 +55,21 @@ func (c *Client) sendAndReceive(msgType uint8, data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to send message: %v", err)
 	}
 
-	buffer := make([]byte, 4096)
-	n, err := c.conn.Read(buffer)
+	headerBuf := make([]byte, 10)
+	_, err = io.ReadFull(c.conn, headerBuf)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %v", err)
+		return nil, fmt.Errorf("failed to read header: %v", err)
 	}
 
-	if n < 10 {
-		return nil, fmt.Errorf("response too short: %d bytes", n)
+	header, err := protocol.DeserializeHeader(headerBuf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse header: %v", err)
 	}
 
-	header, payload, err := protocol.DeserializeMessage(buffer[:n])
+	payload := make([]byte, header.Length)
+	_, err = io.ReadFull(c.conn, payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse response: %v", err)
+		return nil, fmt.Errorf("failed to read payload: %v", err)
 	}
 
 	if header.Type == protocol.MsgTypeError {
@@ -292,4 +295,35 @@ func (c *Client) UpdateData(itemID string, item protocol.NewDataItem) error {
 	}
 
 	return nil
+}
+
+func (c *Client) DownloadData(itemID string) ([]byte, error) {
+	if !c.IsAuthenticated() {
+		return nil, fmt.Errorf("not authenticated")
+	}
+
+	req := protocol.DownloadRequest{
+		ItemID: itemID,
+	}
+
+	data, err := protocol.SerializeDownloadRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize request: %v", err)
+	}
+
+	response, err := c.sendAndReceive(protocol.MsgTypeDownloadRequest, data)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := protocol.DeserializeDownloadResponse(response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	if !resp.Success {
+		return nil, fmt.Errorf("failed to download data: %s", resp.Message)
+	}
+
+	return resp.Data, nil
 }

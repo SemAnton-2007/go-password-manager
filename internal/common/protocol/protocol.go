@@ -35,8 +35,9 @@ func DeserializeMessage(data []byte) (MessageHeader, []byte, error) {
 		Length:    binary.BigEndian.Uint32(data[6:10]),
 	}
 
+	// Если данных меньше чем заголовок + payload, возвращаем только заголовок
 	if len(data) < 10+int(header.Length) {
-		return MessageHeader{}, nil, ErrInvalidMessage
+		return header, nil, nil
 	}
 
 	return header, data[10 : 10+header.Length], nil
@@ -84,18 +85,30 @@ func DeserializeRegisterResponse(data []byte) (RegisterResponse, error) {
 
 func SerializeSyncRequest(req SyncRequest) ([]byte, error) {
 	return json.Marshal(struct {
-		LastSync int64 `json:"last_sync"`
+		LastSync string `json:"last_sync"`
 	}{
-		LastSync: req.LastSync.UnixNano(),
+		LastSync: req.LastSync.Format(time.RFC3339Nano),
 	})
 }
 
 func DeserializeSyncRequest(data []byte) (SyncRequest, error) {
 	var temp struct {
-		LastSync int64 `json:"last_sync"`
+		LastSync string `json:"last_sync"`
 	}
 	err := json.Unmarshal(data, &temp)
-	return SyncRequest{LastSync: time.Unix(0, temp.LastSync)}, err
+	if err != nil {
+		return SyncRequest{}, err
+	}
+
+	var lastSync time.Time
+	if temp.LastSync != "" {
+		lastSync, err = time.Parse(time.RFC3339Nano, temp.LastSync)
+		if err != nil {
+			return SyncRequest{}, err
+		}
+	}
+
+	return SyncRequest{LastSync: lastSync}, nil
 }
 
 func SerializeSyncResponse(resp SyncResponse) ([]byte, error) {
@@ -115,8 +128,8 @@ func SerializeDataItem(item DataItem) ([]byte, error) {
 		Name      string            `json:"name"`
 		Data      []byte            `json:"data"`
 		Metadata  map[string]string `json:"metadata"`
-		CreatedAt int64             `json:"created_at"`
-		UpdatedAt int64             `json:"updated_at"`
+		CreatedAt string            `json:"created_at"`
+		UpdatedAt string            `json:"updated_at"`
 	}
 
 	temp := dataItem{
@@ -125,8 +138,8 @@ func SerializeDataItem(item DataItem) ([]byte, error) {
 		Name:      item.Name,
 		Data:      item.Data,
 		Metadata:  item.Metadata,
-		CreatedAt: item.CreatedAt.UnixNano(),
-		UpdatedAt: item.UpdatedAt.UnixNano(),
+		CreatedAt: item.CreatedAt.Format(time.RFC3339Nano),
+		UpdatedAt: item.UpdatedAt.Format(time.RFC3339Nano),
 	}
 
 	return json.Marshal(temp)
@@ -139,12 +152,22 @@ func DeserializeDataItem(data []byte) (DataItem, error) {
 		Name      string            `json:"name"`
 		Data      []byte            `json:"data"`
 		Metadata  map[string]string `json:"metadata"`
-		CreatedAt int64             `json:"created_at"`
-		UpdatedAt int64             `json:"updated_at"`
+		CreatedAt string            `json:"created_at"`
+		UpdatedAt string            `json:"updated_at"`
 	}
 
 	var temp dataItem
 	err := json.Unmarshal(data, &temp)
+	if err != nil {
+		return DataItem{}, err
+	}
+
+	createdAt, err := time.Parse(time.RFC3339Nano, temp.CreatedAt)
+	if err != nil {
+		return DataItem{}, err
+	}
+
+	updatedAt, err := time.Parse(time.RFC3339Nano, temp.UpdatedAt)
 	if err != nil {
 		return DataItem{}, err
 	}
@@ -155,8 +178,8 @@ func DeserializeDataItem(data []byte) (DataItem, error) {
 		Name:      temp.Name,
 		Data:      temp.Data,
 		Metadata:  temp.Metadata,
-		CreatedAt: time.Unix(0, temp.CreatedAt),
-		UpdatedAt: time.Unix(0, temp.UpdatedAt),
+		CreatedAt: createdAt,
+		UpdatedAt: updatedAt,
 	}, nil
 }
 
@@ -314,4 +337,37 @@ func DeserializeUpdateDataResponse(data []byte) (UpdateDataResponse, error) {
 	var resp UpdateDataResponse
 	err := json.Unmarshal(data, &resp)
 	return resp, err
+}
+
+func SerializeDownloadRequest(req DownloadRequest) ([]byte, error) {
+	return json.Marshal(req)
+}
+
+func DeserializeDownloadRequest(data []byte) (DownloadRequest, error) {
+	var req DownloadRequest
+	err := json.Unmarshal(data, &req)
+	return req, err
+}
+
+func SerializeDownloadResponse(resp DownloadResponse) ([]byte, error) {
+	return json.Marshal(resp)
+}
+
+func DeserializeDownloadResponse(data []byte) (DownloadResponse, error) {
+	var req DownloadResponse
+	err := json.Unmarshal(data, &req)
+	return req, err
+}
+
+func DeserializeHeader(data []byte) (MessageHeader, error) {
+	if len(data) < 10 {
+		return MessageHeader{}, ErrInvalidMessage
+	}
+
+	return MessageHeader{
+		Type:      data[0],
+		Version:   data[1],
+		MessageID: binary.BigEndian.Uint32(data[2:6]),
+		Length:    binary.BigEndian.Uint32(data[6:10]),
+	}, nil
 }

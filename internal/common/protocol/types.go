@@ -22,6 +22,8 @@ const (
 	MsgTypeDeleteDataResponse = 0x0C
 	MsgTypeUpdateDataRequest  = 0x0D
 	MsgTypeUpdateDataResponse = 0x0E
+	MsgTypeDownloadRequest    = 0x0F
+	MsgTypeDownloadResponse   = 0x10
 )
 
 // Типы данных
@@ -30,6 +32,12 @@ const (
 	DataTypeText          = 0x02
 	DataTypeBinary        = 0x03
 	DataTypeBankCard      = 0x04
+)
+
+const (
+	MetaOriginalFileName = "original_file_name"
+	MetaFileSize         = "file_size"
+	MetaFileExtension    = "file_extension"
 )
 
 var (
@@ -133,5 +141,15 @@ type UpdateDataRequest struct {
 
 type UpdateDataResponse struct {
 	Success bool
+	Message string
+}
+
+type DownloadRequest struct {
+	ItemID string
+}
+
+type DownloadResponse struct {
+	Success bool
+	Data    []byte
 	Message string
 }

@@ -214,6 +214,19 @@ func showItemDetails(item protocol.DataItem, password string, reader *bufio.Read
 	fmt.Printf("Создан: %s\n", item.CreatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Printf("Обновлен: %s\n", item.UpdatedAt.Format("2006-01-02 15:04:05"))
 
+	if len(item.Metadata) > 0 {
+		fmt.Println("\n--- Метаинформация ---")
+		for key, value := range item.Metadata {
+			if item.Type == protocol.DataTypeBinary &&
+				(key == protocol.MetaOriginalFileName ||
+					key == protocol.MetaFileSize ||
+					key == protocol.MetaFileExtension) {
+				continue
+			}
+			fmt.Printf("%s: %s\n", key, value)
+		}
+	}
+
 	switch item.Type {
 	case protocol.DataTypeBinary:
 		// Для бинарных данных показываем информацию о файле
@@ -361,6 +374,7 @@ func editItem(item protocol.DataItem, password string, cl *client.Client, reader
 	}
 
 	var newData string
+	var updatedItem protocol.NewDataItem
 
 	switch item.Type {
 	case protocol.DataTypeLoginPassword:
@@ -436,9 +450,90 @@ func editItem(item protocol.DataItem, password string, cl *client.Client, reader
 		return
 	}
 
+	updatedMetadata := make(map[string]string)
+	for k, v := range item.Metadata {
+		updatedMetadata[k] = v
+	}
+
+	fmt.Println("\n--- Редактирование метаинформации ---")
+	if len(updatedMetadata) > 0 {
+		fmt.Println("Текущая метаинформация:")
+		for key, value := range updatedMetadata {
+			if item.Type == protocol.DataTypeBinary &&
+				(key == protocol.MetaOriginalFileName ||
+					key == protocol.MetaFileSize ||
+					key == protocol.MetaFileExtension) {
+				continue
+			}
+			fmt.Printf("  %s: %s\n", key, value)
+		}
+	} else {
+		fmt.Println("Метаинформация отсутствует")
+	}
+
+	fmt.Println("\nДействия с метаинформацией:")
+	fmt.Println("1. Добавить новое поле")
+	if len(updatedMetadata) > 0 {
+		fmt.Println("2. Удалить поле")
+		fmt.Println("3. Редактировать поле")
+	}
+	fmt.Println("0. Пропустить редактирование метаинформации")
+	fmt.Print("Ваш выбор [0]: ")
+
+	metaChoice, _ := reader.ReadString('\n')
+	metaChoice = strings.TrimSpace(metaChoice)
+
+	switch metaChoice {
+	case "1":
+		fmt.Print("Введите имя нового поля: ")
+		fieldName, _ := reader.ReadString('\n')
+		fieldName = strings.TrimSpace(fieldName)
+
+		if fieldName != "" {
+			fmt.Print("Введите значение поля: ")
+			fieldValue, _ := reader.ReadString('\n')
+			fieldValue = strings.TrimSpace(fieldValue)
+
+			updatedMetadata[fieldName] = fieldValue
+			fmt.Printf("Добавлено поле: %s = %s\n", fieldName, fieldValue)
+		}
+
+	case "2":
+		if len(updatedMetadata) > 0 {
+			fmt.Print("Введите имя поля для удаления: ")
+			fieldName, _ := reader.ReadString('\n')
+			fieldName = strings.TrimSpace(fieldName)
+
+			if _, exists := updatedMetadata[fieldName]; exists {
+				delete(updatedMetadata, fieldName)
+				fmt.Printf("Поле '%s' удалено\n", fieldName)
+			} else {
+				fmt.Printf("Поле '%s' не найдено\n", fieldName)
+			}
+		}
+
+	case "3":
+		if len(updatedMetadata) > 0 {
+			fmt.Print("Введите имя поля для редактирования: ")
+			fieldName, _ := reader.ReadString('\n')
+			fieldName = strings.TrimSpace(fieldName)
+
+			if currentValue, exists := updatedMetadata[fieldName]; exists {
+				fmt.Printf("Текущее значение '%s': %s\n", fieldName, currentValue)
+				fmt.Print("Введите новое значение: ")
+				fieldValue, _ := reader.ReadString('\n')
+				fieldValue = strings.TrimSpace(fieldValue)
+
+				updatedMetadata[fieldName] = fieldValue
+				fmt.Printf("Поле '%s' обновлено: %s\n", fieldName, fieldValue)
+			} else {
+				fmt.Printf("Поле '%s' не найдено\n", fieldName)
+			}
+		}
+	}
+
 	if newData == "" {
-		fmt.Println("Данные не изменены")
-		return
+		newData = string(decryptedData)
 	}
 
 	encryptedData, err := encryptData([]byte(newData), cl.GetUsername())
@@ -447,11 +542,11 @@ func editItem(item protocol.DataItem, password string, cl *client.Client, reader
 		return
 	}
 
-	updatedItem := protocol.NewDataItem{
+	updatedItem = protocol.NewDataItem{
 		Type:     item.Type,
 		Name:     item.Name,
 		Data:     encryptedData,
-		Metadata: item.Metadata,
+		Metadata: updatedMetadata,
 	}
 
 	fmt.Println("Обновляем данные на сервере...")
@@ -585,7 +680,7 @@ func createNewItem(cl *client.Client, reader *bufio.Reader) {
 		metadata[protocol.MetaFileExtension] = filepath.Ext(filePath)
 
 	case protocol.DataTypeBankCard:
-		fmt.Print("Введите номер карта: ")
+		fmt.Print("Введите номер карты: ")
 		cardNumber, _ := reader.ReadString('\n')
 		cardNumber = strings.TrimSpace(cardNumber)
 
@@ -609,6 +704,32 @@ func createNewItem(cl *client.Client, reader *bufio.Reader) {
 		}
 		jsonData, _ := json.Marshal(cardData)
 		data = jsonData
+	}
+
+	fmt.Print("Хотите добавить дополнительное поле? Y/n: ")
+	addMore, _ := reader.ReadString('\n')
+	addMore = strings.TrimSpace(strings.ToLower(addMore))
+
+	for addMore == "y" || addMore == "yes" {
+		fmt.Print("Введите имя поля: ")
+		fieldName, _ := reader.ReadString('\n')
+		fieldName = strings.TrimSpace(fieldName)
+
+		if fieldName == "" {
+			fmt.Println("Имя поля не может быть пустым")
+			continue
+		}
+
+		fmt.Print("Введите значение поля: ")
+		fieldValue, _ := reader.ReadString('\n')
+		fieldValue = strings.TrimSpace(fieldValue)
+
+		metadata[fieldName] = fieldValue
+		fmt.Printf("Добавлено поле: %s = %s\n", fieldName, fieldValue)
+
+		fmt.Print("Хотите добавить еще одно поле? Y/n: ")
+		addMore, _ = reader.ReadString('\n')
+		addMore = strings.TrimSpace(strings.ToLower(addMore))
 	}
 
 	encryptedData, err := encryptData(data, cl.GetUsername())

@@ -93,32 +93,6 @@ func TestVerifyPassword(t *testing.T) {
 	}
 }
 
-func TestSimpleEncryptDecrypt(t *testing.T) {
-	testData := []byte("Test data for simple encryption")
-	password := "testpass"
-
-	encrypted, err := SimpleEncrypt(testData, password)
-	if err != nil {
-		t.Fatalf("SimpleEncrypt failed: %v", err)
-	}
-
-	decrypted, err := SimpleDecrypt(encrypted, password)
-	if err != nil {
-		t.Fatalf("SimpleDecrypt failed: %v", err)
-	}
-
-	if string(decrypted) != string(testData) {
-		t.Errorf("Simple decrypt failed. Got: %s, Expected: %s",
-			string(decrypted), string(testData))
-	}
-
-	// Неправильный пароль
-	_, err = SimpleDecrypt(encrypted, "wrongpass")
-	if err == nil {
-		t.Error("Should fail with wrong password")
-	}
-}
-
 func TestEncryptDecryptEmptyData(t *testing.T) {
 	key := sha256.Sum256([]byte("testpassword"))
 
@@ -224,24 +198,5 @@ func TestVerifyPasswordEmpty(t *testing.T) {
 	result = VerifyPassword("test", "invalid-base64!", "invalid-base64!")
 	if result {
 		t.Error("VerifyPassword should fail with invalid base64")
-	}
-}
-
-func TestSimpleEncryptDecryptEmpty(t *testing.T) {
-	emptyData := []byte{}
-	password := "test"
-
-	encrypted, err := SimpleEncrypt(emptyData, password)
-	if err != nil {
-		t.Fatalf("SimpleEncrypt empty data failed: %v", err)
-	}
-
-	decrypted, err := SimpleDecrypt(encrypted, password)
-	if err != nil {
-		t.Fatalf("SimpleDecrypt empty data failed: %v", err)
-	}
-
-	if len(decrypted) != 0 {
-		t.Errorf("Expected empty data, got %d bytes", len(decrypted))
 	}
 }

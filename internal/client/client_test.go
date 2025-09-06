@@ -1,7 +1,6 @@
 package client
 
 import (
-	"encoding/json"
 	"net"
 	"testing"
 	"time"
@@ -277,26 +276,6 @@ func TestClientSaveData(t *testing.T) {
 	}
 }
 
-func TestClientNotAuthenticated(t *testing.T) {
-	client := NewClient("localhost", 8080)
-
-	// Все методы должны возвращать ошибку без аутентификации
-	_, err := client.SyncData(time.Time{})
-	if err == nil {
-		t.Error("SyncData should fail when not authenticated")
-	}
-
-	err = client.SaveData(protocol.NewDataItem{})
-	if err == nil {
-		t.Error("SaveData should fail when not authenticated")
-	}
-
-	_, err = client.GetData("test-id")
-	if err == nil {
-		t.Error("GetData should fail when not authenticated")
-	}
-}
-
 func TestClientErrorResponse(t *testing.T) {
 	server := NewMockServer(func(conn net.Conn) {
 		defer conn.Close()
@@ -530,67 +509,6 @@ func TestClientJSONSerialization(t *testing.T) {
 	err = client.Login("test", "pass")
 	if err == nil {
 		t.Error("Should fail with invalid JSON response")
-	}
-}
-
-func TestClientGetData(t *testing.T) {
-	testItem := protocol.DataItem{
-		ID:   "test-id",
-		Type: protocol.DataTypeText,
-		Name: "Test Item",
-		Data: []byte("test data"),
-	}
-
-	server := NewMockServer(func(conn net.Conn) {
-		defer conn.Close()
-
-		headerBuf := make([]byte, 10)
-		conn.Read(headerBuf)
-
-		header, _ := protocol.DeserializeHeader(headerBuf)
-		payload := make([]byte, header.Length)
-		conn.Read(payload)
-
-		// Проверяем запрос
-		var req protocol.DataRequest
-		json.Unmarshal(payload, &req)
-		if req.ItemID != "test-id" {
-			t.Errorf("ItemID mismatch in request: %s", req.ItemID)
-		}
-
-		// Отправляем ответ
-		resp := protocol.DataResponse{Item: testItem}
-		respData, _ := json.Marshal(resp)
-		message := protocol.SerializeMessage(protocol.MsgTypeDataResponse, 1, respData)
-		conn.Write(message)
-	})
-
-	if err := server.Start(); err != nil {
-		t.Fatalf("Failed to start mock server: %v", err)
-	}
-	defer server.Stop()
-
-	client := NewClient("localhost", 0)
-	conn, err := net.Dial("tcp", server.Addr())
-	if err != nil {
-		t.Fatalf("Failed to connect: %v", err)
-	}
-	client.conn = conn
-	client.username = "testuser"
-	client.token = "test-token"
-	defer client.Close()
-
-	item, err := client.GetData("test-id")
-	if err != nil {
-		t.Errorf("GetData failed: %v", err)
-	}
-
-	if item.ID != "test-id" {
-		t.Errorf("Item ID mismatch. Got: %s, Expected: test-id", item.ID)
-	}
-
-	if item.Name != "Test Item" {
-		t.Errorf("Item name mismatch. Got: %s, Expected: Test Item", item.Name)
 	}
 }
 

@@ -1,3 +1,11 @@
+// Package server предоставляет серверную реализацию менеджера паролей.
+//
+// Сервер обеспечивает:
+// - Многопоточную обработку клиентских соединений
+// - Взаимодействие с базой данных PostgreSQL
+// - Управление миграциями базы данных
+// - Обработку всех операций протокола
+// - Аутентификацию и авторизацию пользователей
 package server
 
 import (
@@ -7,12 +15,31 @@ import (
 	"strconv"
 )
 
+// Server представляет основной сервер приложения.
+// Управляет сетевыми соединениями и взаимодействием с базой данных.
 type Server struct {
 	host     string
 	port     int
 	database *Database
 }
 
+// NewServer создает новый экземпляр сервера.
+//
+// Parameters:
+//
+//	host - хост для прослушивания
+//	port - порт для прослушивания
+//	dbConnStr - строка подключения к PostgreSQL
+//
+// Returns:
+//
+//	*Server - новый экземпляр сервера
+//	error - ошибка инициализации
+//
+// Example:
+//
+//	connStr := "host=localhost user=postgres dbname=password_manager sslmode=disable"
+//	srv, err := NewServer("localhost", 8080, connStr)
 func NewServer(host string, port int, dbConnStr string) (*Server, error) {
 	db, err := NewDatabase(dbConnStr)
 	if err != nil {
@@ -30,6 +57,11 @@ func NewServer(host string, port int, dbConnStr string) (*Server, error) {
 	}, nil
 }
 
+// Start запускает сервер и начинает прослушивание подключений.
+//
+// Returns:
+//
+//	error - ошибка запуска сервера
 func (s *Server) Start() error {
 	addr := net.JoinHostPort(s.host, strconv.Itoa(s.port))
 	listener, err := net.Listen("tcp", addr)
@@ -52,6 +84,11 @@ func (s *Server) Start() error {
 	}
 }
 
+// Stop останавливает сервер и освобождает ресурсы.
+//
+// Returns:
+//
+//	error - ошибка остановки
 func (s *Server) Stop() error {
 	return s.database.Close()
 }

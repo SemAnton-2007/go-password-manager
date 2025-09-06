@@ -294,9 +294,10 @@ func TestRegisterRequestResponse(t *testing.T) {
 		t.Fatalf("SerializeRegisterRequest failed: %v", err)
 	}
 
-	registerReq2, err := DeserializeRegisterRequest(data)
+	var registerReq2 RegisterRequest
+	err = json.Unmarshal(data, &registerReq2)
 	if err != nil {
-		t.Fatalf("DeserializeRegisterRequest failed: %v", err)
+		t.Fatalf("JSON unmarshal failed: %v", err)
 	}
 
 	if registerReq2.Username != registerReq.Username {

@@ -1,3 +1,10 @@
+// Package handler предоставляет обработчики клиентских соединений для менеджера паролей.
+//
+// Обработчики реализуют:
+// - Разбор и валидацию входящих сообщений
+// - Маршрутизацию запросов к соответствующим методам базы данных
+// - Формирование ответов согласно протоколу
+// - Управление сессиями и аутентификацией
 package server
 
 import (
@@ -10,6 +17,8 @@ import (
 	"password-manager/internal/common/protocol"
 )
 
+// ClientHandler обрабатывает соединение с клиентом.
+// Управляет состоянием сессии, аутентификацией и обработкой запросов.
 type ClientHandler struct {
 	conn       net.Conn
 	db         *Database
@@ -19,6 +28,21 @@ type ClientHandler struct {
 	messageMux sync.Mutex
 }
 
+// NewClientHandler создает новый обработчик для клиентского соединения.
+//
+// Parameters:
+//
+//	conn - сетевое соединение с клиентом
+//	db   - подключение к базе данных
+//
+// Returns:
+//
+//	*ClientHandler - новый экземпляр обработчика
+//
+// Example:
+//
+//	handler := NewClientHandler(conn, database)
+//	go handler.Handle()
 func NewClientHandler(conn net.Conn, db *Database) *ClientHandler {
 	return &ClientHandler{
 		conn: conn,
@@ -26,6 +50,10 @@ func NewClientHandler(conn net.Conn, db *Database) *ClientHandler {
 	}
 }
 
+// Handle обрабатывает входящие сообщения от клиента.
+//
+// Метод работает в цикле, читая и обрабатывая сообщения до закрытия соединения.
+// Автоматически закрывает соединение при завершении работы.
 func (h *ClientHandler) Handle() {
 	defer h.conn.Close()
 
@@ -57,12 +85,16 @@ func (h *ClientHandler) Handle() {
 	}
 }
 
+// handleMessage маршрутизирует входящее сообщение к соответствующему обработчику.
+//
+// Parameters:
+//
+//	msgType - тип сообщения из протокола
+//	data    - данные сообщения
 func (h *ClientHandler) handleMessage(msgType uint8, data []byte) {
 	switch msgType {
 	case protocol.MsgTypeAuthRequest:
 		h.handleAuthRequest(data)
-	case protocol.MsgTypeRegisterRequest:
-		h.handleRegisterRequest(data)
 	case protocol.MsgTypeSyncRequest:
 		h.handleSyncRequest(data)
 	case protocol.MsgTypeDataRequest:
@@ -80,6 +112,11 @@ func (h *ClientHandler) handleMessage(msgType uint8, data []byte) {
 	}
 }
 
+// handleAuthRequest обрабатывает запрос аутентификации.
+//
+// Parameters:
+//
+//	data - данные запроса в формате AuthRequest
 func (h *ClientHandler) handleAuthRequest(data []byte) {
 	req, err := protocol.DeserializeAuthRequest(data)
 	if err != nil {
@@ -119,31 +156,11 @@ func (h *ClientHandler) handleAuthRequest(data []byte) {
 	}
 }
 
-func (h *ClientHandler) handleRegisterRequest(data []byte) {
-	req, err := protocol.DeserializeRegisterRequest(data)
-	if err != nil {
-		log.Printf("Error deserializing register request: %v", err)
-		h.sendError("Invalid register request format")
-		return
-	}
-
-	log.Printf("Register request for user: %s", req.Username)
-
-	err = h.db.CreateUser(req.Username, req.Password)
-	if err != nil {
-		log.Printf("Registration error: %v", err)
-		h.sendError(fmt.Sprintf("Registration failed: %v", err))
-		return
-	}
-
-	resp := protocol.RegisterResponse{
-		Success: true,
-		Message: "User registered successfully",
-	}
-	h.sendResponse(protocol.MsgTypeRegisterResponse, resp)
-	log.Printf("User %s registered successfully", req.Username)
-}
-
+// handleSyncRequest обрабатывает запрос синхронизации данных.
+//
+// Parameters:
+//
+//	data - данные запроса в формате SyncRequest
 func (h *ClientHandler) handleSyncRequest(data []byte) {
 	if h.userID == 0 {
 		h.sendError("Not authenticated")
@@ -171,6 +188,11 @@ func (h *ClientHandler) handleSyncRequest(data []byte) {
 	log.Printf("Sent %d items to user %s", len(items), h.username)
 }
 
+// handleDataRequest обрабатывает запрос конкретного элемента данных.
+//
+// Parameters:
+//
+//	data - данные запроса в формате DataRequest
 func (h *ClientHandler) handleDataRequest(data []byte) {
 	if h.userID == 0 {
 		h.sendError("Not authenticated")
@@ -198,6 +220,11 @@ func (h *ClientHandler) handleDataRequest(data []byte) {
 	log.Printf("Sent data item %s to user %s", req.ItemID, h.username)
 }
 
+// handleSaveDataRequest обрабатывает запрос сохранения данных.
+//
+// Parameters:
+//
+//	data - данные запроса в формате SaveDataRequest
 func (h *ClientHandler) handleSaveDataRequest(data []byte) {
 	if h.userID == 0 {
 		h.sendError("Not authenticated")
@@ -229,6 +256,12 @@ func (h *ClientHandler) handleSaveDataRequest(data []byte) {
 	log.Printf("Saved data for user %s: %s", h.username, req.Item.Name)
 }
 
+// sendResponse отправляет ответ клиенту.
+//
+// Parameters:
+//
+//	msgType - тип ответного сообщения
+//	data    - данные для отправки (интерфейс, сериализуемый в JSON)
 func (h *ClientHandler) sendResponse(msgType uint8, data interface{}) {
 	h.messageMux.Lock()
 	defer h.messageMux.Unlock()
@@ -273,6 +306,11 @@ func (h *ClientHandler) sendResponse(msgType uint8, data interface{}) {
 	}
 }
 
+// sendError отправляет сообщение об ошибке клиенту.
+//
+// Parameters:
+//
+//	message - текст ошибки
 func (h *ClientHandler) sendError(message string) {
 	h.messageMux.Lock()
 	defer h.messageMux.Unlock()
@@ -297,6 +335,11 @@ func (h *ClientHandler) sendError(message string) {
 	}
 }
 
+// handleUpdateDataRequest обрабатывает запрос обновления элемента данных.
+//
+// Parameters:
+//
+//	data - данные запроса в формате UpdateDataRequest
 func (h *ClientHandler) handleDeleteDataRequest(data []byte) {
 	if h.userID == 0 {
 		h.sendError("Not authenticated")
@@ -327,6 +370,11 @@ func (h *ClientHandler) handleDeleteDataRequest(data []byte) {
 	log.Printf("Deleted data for user %s: %s", h.username, req.ItemID)
 }
 
+// handleUpdateDataRequest обрабатывает запрос обновления элемента данных.
+//
+// Parameters:
+//
+//	data - данные запроса в формате UpdateDataRequest
 func (h *ClientHandler) handleUpdateDataRequest(data []byte) {
 	if h.userID == 0 {
 		h.sendError("Not authenticated")
@@ -357,6 +405,11 @@ func (h *ClientHandler) handleUpdateDataRequest(data []byte) {
 	log.Printf("Updated data for user %s: %s", h.username, req.ItemID)
 }
 
+// handleDownloadRequest обрабатывает запрос загрузки данных элемента.
+//
+// Parameters:
+//
+//	data - данные запроса в формате DownloadRequest
 func (h *ClientHandler) handleDownloadRequest(data []byte) {
 	if h.userID == 0 {
 		h.sendError("Not authenticated")

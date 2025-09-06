@@ -1,3 +1,14 @@
+// Package main предоставляет клиентское приложение для менеджера паролей.
+//
+// Клиент позволяет пользователям:
+// - Регистрироваться и аутентифицироваться
+// - Создавать и управлять различными типами данных
+// - Синхронизировать данные с сервером
+// - Шифровать данные на стороне клиента
+//
+// Пример использования:
+//
+//	go run cmd/client/main.go
 package main
 
 import (
@@ -18,8 +29,8 @@ import (
 )
 
 var (
-	version   = "1.0.0"
-	buildDate = "2025-09-04"
+	version   = "1.0.1"
+	buildDate = "2025-09-06"
 )
 
 func main() {
@@ -31,6 +42,13 @@ func main() {
 	runClient()
 }
 
+// runClient запускает интерактивный клиентский интерфейс.
+//
+// Process:
+//  1. Запрашивает параметры подключения у пользователя
+//  2. Устанавливает соединение с сервером
+//  3. Выполняет аутентификацию или регистрацию
+//  4. Запускает главное меню
 func runClient() {
 	fmt.Println("=== Password Manager Client ===")
 
@@ -136,6 +154,17 @@ func runClient() {
 	mainMenu(cl, reader)
 }
 
+// mainMenu отображает главное меню и обрабатывает выбор пользователя.
+//
+// Parameters:
+//
+//	cl     - клиент для выполнения операций
+//	reader - reader для ввода пользователя
+//
+// Menu options:
+//  1. Показать мои данные
+//  2. Создать новый элемент
+//  3. Выйти
 func mainMenu(cl *client.Client, reader *bufio.Reader) {
 	for {
 		fmt.Printf("\n=== Главное меню (пользователь: %s) ===\n", cl.GetUsername())
@@ -164,6 +193,17 @@ func mainMenu(cl *client.Client, reader *bufio.Reader) {
 	}
 }
 
+// showData отображает список данных пользователя с возможностью выбора.
+//
+// Parameters:
+//
+//	cl     - клиент для загрузки данных
+//	reader - reader для ввода пользователя
+//
+// Process:
+//   - Загружает и отображает список элементов
+//   - Предлагает выбрать элемент для детального просмотра
+//   - Обрабатывает действия пользователя
 func showData(cl *client.Client, reader *bufio.Reader) {
 	fmt.Println("\n=== Мои данные ===")
 	fmt.Println("Синхронизируем данные...")
@@ -208,6 +248,14 @@ func showData(cl *client.Client, reader *bufio.Reader) {
 	showItemDetails(items[index-1], cl.GetUsername(), reader, cl)
 }
 
+// showItemDetails отображает детальную информацию об элементе данных.
+//
+// Parameters:
+//
+//	item     - элемент для отображения
+//	password - пароль для дешифрования данных
+//	reader   - reader для ввода пользователя
+//	cl       - клиент для выполнения операций
 func showItemDetails(item protocol.DataItem, password string, reader *bufio.Reader, cl *client.Client) {
 	fmt.Printf("\n=== Детали элемента: %s ===\n", item.Name)
 	fmt.Printf("Тип: %s\n", getDataTypeName(item.Type))
@@ -310,6 +358,18 @@ func showItemDetails(item protocol.DataItem, password string, reader *bufio.Read
 	}
 }
 
+// downloadFile обрабатывает скачивание и сохранение бинарного файла.
+//
+// Parameters:
+//
+//	item   - элемент с информацией о файле
+//	cl     - клиент для загрузки данных
+//	reader - reader для ввода пользователя
+//
+// Process:
+//   - Загружает данные файла с сервера
+//   - Дешифрует данные
+//   - Сохраняет файл в указанное место
 func downloadFile(item protocol.DataItem, cl *client.Client, reader *bufio.Reader) {
 	fmt.Println("\n=== Скачивание файла ===")
 
@@ -362,6 +422,14 @@ func downloadFile(item protocol.DataItem, cl *client.Client, reader *bufio.Reade
 	reader.ReadString('\n')
 }
 
+// editItem предоставляет интерфейс редактирования элемента данных.
+//
+// Parameters:
+//
+//	item     - элемент для редактирования
+//	password - пароль для дешифрования/шифрования
+//	cl       - клиент для сохранения изменений
+//	reader   - reader для ввода пользователя
 func editItem(item protocol.DataItem, password string, cl *client.Client, reader *bufio.Reader) {
 	fmt.Printf("\n=== Редактирование элемента: %s ===\n", item.Name)
 
@@ -582,6 +650,18 @@ func deleteItem(itemID string, cl *client.Client, reader *bufio.Reader) {
 	reader.ReadString('\n')
 }
 
+// createNewItem интерактивно создает новый элемент данных.
+//
+// Parameters:
+//
+//	cl     - клиент для сохранения данных
+//	reader - reader для ввода пользователя
+//
+// Process:
+//   - Запрашивает тип данных
+//   - Запрашивает основные поля в зависимости от типа
+//   - Предлагает добавить метаданные
+//   - Шифрует и сохраняет данные
 func createNewItem(cl *client.Client, reader *bufio.Reader) {
 	fmt.Println("\n=== Создание нового элемента ===")
 
@@ -754,26 +834,77 @@ func createNewItem(cl *client.Client, reader *bufio.Reader) {
 	fmt.Println("Данные успешно сохранены!")
 }
 
+// encryptData шифрует данные.
+//
+// Parameters:
+//
+//	data     - данные для шифрования
+//	password - пароль для генерации ключа
+//
+// Returns:
+//
+//	[]byte - зашифрованные данные
+//	error  - ошибка шифрования
 func encryptData(data []byte, password string) ([]byte, error) {
 	key := deriveSimpleKey(password)
 	return crypto.Encrypt(data, key)
 }
 
+// decryptData дешифрует данные.
+//
+// Parameters:
+//
+//	data     - зашифрованные данные
+//	password - пароль для генерации ключа
+//
+// Returns:
+//
+//	[]byte - расшифрованные данные
+//	error  - ошибка дешифрования
 func decryptData(data []byte, password string) ([]byte, error) {
 	key := deriveSimpleKey(password)
 	return crypto.Decrypt(data, key)
 }
 
+// decryptItemData дешифрует данные элемента
+//
+// Parameters:
+//
+//	item     - элемент с зашифрованными данными
+//	password - пароль для генерации ключа
+//
+// Returns:
+//
+//	[]byte - расшифрованные данные
+//	error  - ошибка дешифрования
 func decryptItemData(item protocol.DataItem, password string) ([]byte, error) {
 	key := deriveSimpleKey(password)
 	return crypto.Decrypt(item.Data, key)
 }
 
+// deriveSimpleKey создает cryptographic key из пароля
+//
+// Parameters:
+//
+//	password - пароль для генерации ключа
+//
+// Returns:
+//
+//	[]byte - ключ длиной 32 байта
 func deriveSimpleKey(password string) []byte {
 	hash := sha256.Sum256([]byte(password))
 	return hash[:]
 }
 
+// getDataTypeName возвращает человеко-читаемое имя типа данных.
+//
+// Parameters:
+//
+//	dataType - числовой тип данных из протокола
+//
+// Returns:
+//
+//	string - читаемое имя типа данных
 func getDataTypeName(dataType uint8) string {
 	switch dataType {
 	case protocol.DataTypeLoginPassword:

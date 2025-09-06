@@ -1,3 +1,11 @@
+// Package migration предоставляет систему миграций базы данных для менеджера паролей.
+//
+// Миграции позволяют:
+// - Создавать и обновлять схему базы данных
+// - Управлять версиями схемы
+// - Автоматически применять изменения при обновлении
+//
+// Миграции хранятся в виде SQL-файлов в директории migrations.
 package server
 
 import (
@@ -11,11 +19,23 @@ import (
 	"strings"
 )
 
+// MigrationManager управляет применением миграций базы данных.
+// Отслеживает примененные миграции и обеспечивает их идемпотентность.
 type MigrationManager struct {
 	db            *sql.DB
 	migrationsDir string
 }
 
+// NewMigrationManager создает новый менеджер миграций.
+//
+// Parameters:
+//
+//	db            - подключение к базе данных
+//	migrationsDir - путь к директории с миграциями
+//
+// Returns:
+//
+//	*MigrationManager - новый экземпляр менеджера
 func NewMigrationManager(db *sql.DB, migrationsDir string) *MigrationManager {
 	return &MigrationManager{
 		db:            db,
@@ -23,6 +43,18 @@ func NewMigrationManager(db *sql.DB, migrationsDir string) *MigrationManager {
 	}
 }
 
+// RunMigrations применяет все непримененные миграции к базе данных.
+//
+// Returns:
+//
+//	error - ошибка применения миграций
+//
+// Process:
+//  1. Создает таблицу миграций если не существует
+//  2. Получает список уже примененных миграций
+//  3. Находит все доступные миграции в директории
+//  4. Применяет миграции в порядке их имен
+//  5. Записывает applied миграции в таблицу
 func (m *MigrationManager) RunMigrations() error {
 	// Создаем таблицу миграций если она не существует
 	if err := m.createMigrationsTable(); err != nil {
@@ -54,6 +86,19 @@ func (m *MigrationManager) RunMigrations() error {
 	return nil
 }
 
+// createMigrationsTable создает таблицу для отслеживания примененных миграций.
+//
+// Returns:
+//
+//	error - ошибка создания таблицы
+//
+// Table schema:
+//
+//	CREATE TABLE IF NOT EXISTS migrations (
+//	    id SERIAL PRIMARY KEY,
+//	    name VARCHAR(255) NOT NULL UNIQUE,
+//	    applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+//	)
 func (m *MigrationManager) createMigrationsTable() error {
 	_, err := m.db.Exec(`
 		CREATE TABLE IF NOT EXISTS migrations (
@@ -65,6 +110,12 @@ func (m *MigrationManager) createMigrationsTable() error {
 	return err
 }
 
+// getAppliedMigrations возвращает список уже примененных миграций.
+//
+// Returns:
+//
+//	map[string]bool - карта имен примененных миграций
+//	error - ошибка запроса
 func (m *MigrationManager) getAppliedMigrations() (map[string]bool, error) {
 	rows, err := m.db.Query("SELECT name FROM migrations ORDER BY name")
 	if err != nil {
@@ -84,6 +135,12 @@ func (m *MigrationManager) getAppliedMigrations() (map[string]bool, error) {
 	return migrations, nil
 }
 
+// getAvailableMigrations возвращает список всех доступных миграций.
+//
+// Returns:
+//
+//	[]string - список имен файлов миграций
+//	error - ошибка чтения директории
 func (m *MigrationManager) getAvailableMigrations() ([]string, error) {
 	files, err := ioutil.ReadDir(m.migrationsDir)
 	if err != nil {
@@ -105,6 +162,15 @@ func (m *MigrationManager) getAvailableMigrations() ([]string, error) {
 	return migrations, nil
 }
 
+// applyMigration применяет конкретную миграцию к базе данных.
+//
+// Parameters:
+//
+//	migrationName - имя файла миграции
+//
+// Returns:
+//
+//	error - ошибка применения миграции
 func (m *MigrationManager) applyMigration(migrationName string) error {
 	filePath := filepath.Join(m.migrationsDir, migrationName)
 	content, err := ioutil.ReadFile(filePath)

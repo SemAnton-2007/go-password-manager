@@ -1,7 +1,19 @@
+// Package client предоставляет клиентскую библиотеку для взаимодействия с сервером менеджера паролей.
+//
+// Клиент реализует:
+// - Установку и поддержание соединения с сервером
+// - Сериализацию/десериализацию сообщений протокола
+// - Управление аутентификацией и сессиями
+// - Операции с данными (создание, чтение, обновление, удаление)
+//
+// Пример использования:
+//
+//	cl := client.NewClient("localhost", 8080)
+//	err := cl.Connect()
+//	err := cl.Login("username", "password")
 package client
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -18,6 +30,16 @@ type Client struct {
 	username string
 }
 
+// NewClient создает новый клиент для подключения к серверу.
+//
+// Parameters:
+//
+//	host - хост сервера
+//	port - порт сервера
+//
+// Returns:
+//
+//	*Client - новый экземпляр клиента
 func NewClient(host string, port int) *Client {
 	return &Client{
 		host: host,
@@ -25,6 +47,11 @@ func NewClient(host string, port int) *Client {
 	}
 }
 
+// Connect устанавливает TCP соединение с сервером.
+//
+// Returns:
+//
+//	error - ошибка если соединение не удалось установить
 func (c *Client) Connect() error {
 	addr := fmt.Sprintf("%s:%d", c.host, c.port)
 	conn, err := net.Dial("tcp", addr)
@@ -35,6 +62,11 @@ func (c *Client) Connect() error {
 	return nil
 }
 
+// Close закрывает соединение с сервером.
+//
+// Returns:
+//
+//	error - ошибка закрытия соединения
 func (c *Client) Close() error {
 	if c.conn != nil {
 		return c.conn.Close()
@@ -83,6 +115,16 @@ func (c *Client) sendAndReceive(msgType uint8, data []byte) ([]byte, error) {
 	return payload, nil
 }
 
+// Register регистрирует нового пользователя на сервере.
+//
+// Parameters:
+//
+//	username - имя пользователя
+//	password - пароль
+//
+// Returns:
+//
+//	error - ошибка если регистрация не удалась
 func (c *Client) Register(username, password string) error {
 	req := protocol.RegisterRequest{
 		Username: username,
@@ -111,6 +153,16 @@ func (c *Client) Register(username, password string) error {
 	return nil
 }
 
+// Login выполняет аутентификацию пользователя.
+//
+// Parameters:
+//
+//	username - имя пользователя
+//	password - пароль
+//
+// Returns:
+//
+//	error - ошибка если аутентификация не удалась
 func (c *Client) Login(username, password string) error {
 	req := protocol.AuthRequest{
 		Username: username,
@@ -141,6 +193,16 @@ func (c *Client) Login(username, password string) error {
 	return nil
 }
 
+// SyncData синхронизирует данные с сервером.
+//
+// Parameters:
+//
+//	lastSync - время последней успешной синхронизации
+//
+// Returns:
+//
+//	[]DataItem - список измененных элементов
+//	error - ошибка синхронизации
 func (c *Client) SyncData(lastSync time.Time) ([]protocol.DataItem, error) {
 	if !c.IsAuthenticated() {
 		return nil, fmt.Errorf("not authenticated")
@@ -168,33 +230,15 @@ func (c *Client) SyncData(lastSync time.Time) ([]protocol.DataItem, error) {
 	return resp.Items, nil
 }
 
-func (c *Client) GetData(itemID string) (protocol.DataItem, error) {
-	if !c.IsAuthenticated() {
-		return protocol.DataItem{}, fmt.Errorf("not authenticated")
-	}
-
-	req := protocol.DataRequest{
-		ItemID: itemID,
-	}
-
-	data, err := json.Marshal(req)
-	if err != nil {
-		return protocol.DataItem{}, fmt.Errorf("failed to serialize request: %v", err)
-	}
-
-	response, err := c.sendAndReceive(protocol.MsgTypeDataRequest, data)
-	if err != nil {
-		return protocol.DataItem{}, err
-	}
-
-	var resp protocol.DataResponse
-	if err := json.Unmarshal(response, &resp); err != nil {
-		return protocol.DataItem{}, fmt.Errorf("failed to parse response: %v", err)
-	}
-
-	return resp.Item, nil
-}
-
+// SaveData сохраняет новый элемент данных на сервере.
+//
+// Parameters:
+//
+//	item - элемент данных для сохранения
+//
+// Returns:
+//
+//	error - ошибка сохранения
 func (c *Client) SaveData(item protocol.NewDataItem) error {
 	if !c.IsAuthenticated() {
 		return fmt.Errorf("not authenticated")
@@ -226,14 +270,33 @@ func (c *Client) SaveData(item protocol.NewDataItem) error {
 	return nil
 }
 
+// IsAuthenticated проверяет статус аутентификации клиента.
+//
+// Returns:
+//
+//	bool - true если клиент аутентифицирован
 func (c *Client) IsAuthenticated() bool {
 	return c.token != "" && c.username != ""
 }
 
+// GetUsername возвращает имя текущего аутентифицированного пользователя.
+//
+// Returns:
+//
+//	string - имя пользователя или пустая строка если не аутентифицирован
 func (c *Client) GetUsername() string {
 	return c.username
 }
 
+// DeleteData удаляет элемент данных с сервера.
+//
+// Parameters:
+//
+//	itemID - ID элемента для удаления
+//
+// Returns:
+//
+//	error - ошибка удаления
 func (c *Client) DeleteData(itemID string) error {
 	if !c.IsAuthenticated() {
 		return fmt.Errorf("not authenticated")
@@ -265,6 +328,16 @@ func (c *Client) DeleteData(itemID string) error {
 	return nil
 }
 
+// UpdateData обновляет существующий элемент данных на сервере.
+//
+// Parameters:
+//
+//	itemID - ID элемента для обновления
+//	item   - новые данные элемента
+//
+// Returns:
+//
+//	error - ошибка обновления
 func (c *Client) UpdateData(itemID string, item protocol.NewDataItem) error {
 	if !c.IsAuthenticated() {
 		return fmt.Errorf("not authenticated")
@@ -297,6 +370,16 @@ func (c *Client) UpdateData(itemID string, item protocol.NewDataItem) error {
 	return nil
 }
 
+// DownloadData загружает данные элемента
+//
+// Parameters:
+//
+//	itemID - ID элемента для загрузки
+//
+// Returns:
+//
+//	[]byte - загруженные данные
+//	error  - ошибка загрузки
 func (c *Client) DownloadData(itemID string) ([]byte, error) {
 	if !c.IsAuthenticated() {
 		return nil, fmt.Errorf("not authenticated")

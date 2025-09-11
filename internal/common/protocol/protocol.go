@@ -157,6 +157,22 @@ func SerializeRegisterRequest(req RegisterRequest) ([]byte, error) {
 	return json.Marshal(req)
 }
 
+// DeserializeRegisterRequest десериализует запрос регистрации из JSON.
+//
+// Parameters:
+//
+//	data - сериализованные данные
+//
+// Returns:
+//
+//	RegisterRequest - разобранная структура
+//	error           - ошибка десериализации
+func DeserializeRegisterRequest(data []byte) (RegisterRequest, error) {
+	var req RegisterRequest
+	err := json.Unmarshal(data, &req)
+	return req, err
+}
+
 // SerializeRegisterResponse сериализует ответ регистрации в JSON.
 //
 // Parameters:

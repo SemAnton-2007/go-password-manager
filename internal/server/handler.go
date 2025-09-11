@@ -95,6 +95,8 @@ func (h *ClientHandler) handleMessage(msgType uint8, data []byte) {
 	switch msgType {
 	case protocol.MsgTypeAuthRequest:
 		h.handleAuthRequest(data)
+	case protocol.MsgTypeRegisterRequest:
+		h.handleRegisterRequest(data)
 	case protocol.MsgTypeSyncRequest:
 		h.handleSyncRequest(data)
 	case protocol.MsgTypeDataRequest:
@@ -154,6 +156,42 @@ func (h *ClientHandler) handleAuthRequest(data []byte) {
 		h.sendError("Authentication failed: invalid credentials")
 		log.Printf("Authentication failed for user: %s", req.Username)
 	}
+}
+
+// handleRegisterRequest обрабатывает запрос регистрации нового пользователя.
+//
+// Parameters:
+//
+//	data - данные запроса в формате RegisterRequest
+//
+// Process:
+//   - Десериализует запрос регистрации
+//   - Создает нового пользователя в базе данных
+//   - Отправляет ответ с результатом регистрации
+//   - Логирует успешную регистрацию или ошибки
+func (h *ClientHandler) handleRegisterRequest(data []byte) {
+	req, err := protocol.DeserializeRegisterRequest(data)
+	if err != nil {
+		log.Printf("Error deserializing register request: %v", err)
+		h.sendError("Invalid register request format")
+		return
+	}
+
+	log.Printf("Register request for user: %s", req.Username)
+
+	err = h.db.CreateUser(req.Username, req.Password)
+	if err != nil {
+		log.Printf("Registration error: %v", err)
+		h.sendError(fmt.Sprintf("Registration failed: %v", err))
+		return
+	}
+
+	resp := protocol.RegisterResponse{
+		Success: true,
+		Message: "User registered successfully",
+	}
+	h.sendResponse(protocol.MsgTypeRegisterResponse, resp)
+	log.Printf("User %s registered successfully", req.Username)
 }
 
 // handleSyncRequest обрабатывает запрос синхронизации данных.

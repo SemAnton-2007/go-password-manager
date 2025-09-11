@@ -26,6 +26,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -68,7 +69,7 @@ func NewUIClient(host string, port int) *UIClient {
 //  3. Выполняет аутентификацию или регистрацию
 //  4. Запускает главное меню
 func (c *UIClient) Run() error {
-	fmt.Println("=== Password Manager Client ===")
+	log.Println("=== Password Manager Client ===")
 
 	// Запрос параметров подключения
 	fmt.Print("Введите адрес сервера [localhost]: ")
@@ -92,11 +93,11 @@ func (c *UIClient) Run() error {
 	c.Client = NewClient(host, port)
 	defer c.Client.Close()
 
-	fmt.Printf("Попытка подключения к %s:%d...\n", host, port)
+	log.Printf("Попытка подключения к %s:%d...\n", host, port)
 	if err := c.Connect(); err != nil {
 		return fmt.Errorf("ошибка подключения: %v", err)
 	}
-	fmt.Println("Подключение успешно!")
+	log.Println("Подключение успешно!")
 
 	// Аутентификация/регистрация
 	if err := c.handleAuth(); err != nil {
@@ -147,11 +148,11 @@ func (c *UIClient) handleRegistration() error {
 		return fmt.Errorf("пароль не может быть пустым")
 	}
 
-	fmt.Println("Регистрируем пользователя...")
+	log.Println("Регистрируем пользователя...")
 	if err := c.Register(username, password); err != nil {
 		return fmt.Errorf("ошибка регистрации: %v", err)
 	}
-	fmt.Println("Регистрация успешна!")
+	log.Println("Регистрация успешна!")
 
 	return c.handleLoginWithCredentials(username, password)
 }
@@ -178,11 +179,11 @@ func (c *UIClient) handleLogin() error {
 
 // handleLoginWithCredentials выполняет авторизацию
 func (c *UIClient) handleLoginWithCredentials(username, password string) error {
-	fmt.Println("Авторизуем пользователя...")
+	log.Println("Авторизуем пользователя...")
 	if err := c.Login(username, password); err != nil {
 		return fmt.Errorf("ошибка авторизации: %v", err)
 	}
-	fmt.Println("Авторизация успешна!")
+	log.Println("Авторизация успешна!")
 	return nil
 }
 
@@ -217,7 +218,7 @@ func (c *UIClient) mainMenu() {
 		case "2":
 			c.createNewItem()
 		case "3":
-			fmt.Println("Выход...")
+			log.Println("Выход...")
 			return
 		default:
 			fmt.Println("Неверный выбор")
@@ -233,11 +234,11 @@ func (c *UIClient) mainMenu() {
 //   - Обрабатывает действия пользователя
 func (c *UIClient) showData() {
 	fmt.Println("\n=== Мои данные ===")
-	fmt.Println("Синхронизируем данные...")
+	log.Println("Синхронизируем данные...")
 
 	items, err := c.SyncData(time.Time{})
 	if err != nil {
-		fmt.Printf("Ошибка синхронизации: %v\n", err)
+		log.Printf("Ошибка синхронизации: %v\n", err)
 		return
 	}
 
@@ -313,7 +314,7 @@ func (c *UIClient) showItemDetails(item protocol.DataItem) {
 		// Для других типов данных дешифруем и показываем содержимое
 		decryptedData, err := c.decryptItemData(item)
 		if err != nil {
-			fmt.Printf("Ошибка декодирования: %v\n", err)
+			log.Printf("Ошибка декодирования: %v\n", err)
 			fmt.Print("Нажмите Enter для возврата...")
 			c.reader.ReadString('\n')
 			return
@@ -387,10 +388,10 @@ func (c *UIClient) showItemDetails(item protocol.DataItem) {
 func (c *UIClient) downloadFile(item protocol.DataItem) {
 	fmt.Println("\n=== Скачивание файла ===")
 
-	fmt.Println("Загружаем файл...")
+	log.Println("Загружаем файл...")
 	fileData, err := c.DownloadData(item.ID)
 	if err != nil {
-		fmt.Printf("Ошибка загрузки: %v\n", err)
+		log.Printf("Ошибка загрузки: %v\n", err)
 		fmt.Print("Нажмите Enter для возврата...")
 		c.reader.ReadString('\n')
 		return
@@ -398,7 +399,7 @@ func (c *UIClient) downloadFile(item protocol.DataItem) {
 
 	decryptedData, err := c.decryptData(fileData)
 	if err != nil {
-		fmt.Printf("Ошибка расшифровки: %v\n", err)
+		log.Printf("Ошибка расшифровки: %v\n", err)
 		fmt.Print("Нажмите Enter для возврата...")
 		c.reader.ReadString('\n')
 		return
@@ -418,20 +419,20 @@ func (c *UIClient) downloadFile(item protocol.DataItem) {
 
 	dir := filepath.Dir(savePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		fmt.Printf("Ошибка создания директории: %v\n", err)
+		log.Printf("Ошибка создания директории: %v\n", err)
 		fmt.Print("Нажмите Enter для возврата...")
 		c.reader.ReadString('\n')
 		return
 	}
 
 	if err := ioutil.WriteFile(savePath, decryptedData, 0644); err != nil {
-		fmt.Printf("Ошибка сохранения файла: %v\n", err)
+		log.Printf("Ошибка сохранения файла: %v\n", err)
 		fmt.Print("Нажмите Enter для возврата...")
 		c.reader.ReadString('\n')
 		return
 	}
 
-	fmt.Printf("Файл успешно сохранен: %s (%d байт)\n", savePath, len(decryptedData))
+	log.Printf("Файл успешно сохранен: %s (%d байт)\n", savePath, len(decryptedData))
 	fmt.Print("Нажмите Enter для продолжения...")
 	c.reader.ReadString('\n')
 }
@@ -442,7 +443,7 @@ func (c *UIClient) editItem(item protocol.DataItem) {
 
 	decryptedData, err := c.decryptItemData(item)
 	if err != nil {
-		fmt.Printf("Ошибка декодирования: %v\n", err)
+		log.Printf("Ошибка декодирования: %v\n", err)
 		fmt.Print("Нажмите Enter для возврата...")
 		c.reader.ReadString('\n')
 		return
@@ -613,7 +614,7 @@ func (c *UIClient) editItem(item protocol.DataItem) {
 
 	encryptedData, err := c.encryptData([]byte(newData))
 	if err != nil {
-		fmt.Printf("Ошибка шифрования данных: %v\n", err)
+		log.Printf("Ошибка шифрования данных: %v\n", err)
 		return
 	}
 
@@ -624,11 +625,11 @@ func (c *UIClient) editItem(item protocol.DataItem) {
 		Metadata: updatedMetadata,
 	}
 
-	fmt.Println("Обновляем данные на сервере...")
+	log.Println("Обновляем данные на сервере...")
 	if err := c.UpdateData(item.ID, updatedItem); err != nil {
-		fmt.Printf("Ошибка обновления: %v\n", err)
+		log.Printf("Ошибка обновления: %v\n", err)
 	} else {
-		fmt.Println("Данные успешно обновлены!")
+		log.Println("Данные успешно обновлены!")
 	}
 
 	fmt.Print("Нажмите Enter для продолжения...")
@@ -646,12 +647,12 @@ func (c *UIClient) deleteItem(itemID string) {
 		return
 	}
 
-	fmt.Println("Удаляем элемент...")
+	log.Println("Удаляем элемент...")
 	err := c.DeleteData(itemID)
 	if err != nil {
-		fmt.Printf("Ошибка удаления: %v\n", err)
+		log.Printf("Ошибка удаления: %v\n", err)
 	} else {
-		fmt.Println("Элемент успешно удален!")
+		log.Println("Элемент успешно удален!")
 	}
 
 	fmt.Print("Нажмите Enter для продолжения...")
@@ -741,7 +742,7 @@ func (c *UIClient) createNewItem() {
 
 		fileInfo, err := os.Stat(filePath)
 		if err != nil {
-			fmt.Printf("Ошибка получения информации о файле: %v\n", err)
+			log.Printf("Ошибка получения информации о файле: %v\n", err)
 			return
 		}
 
@@ -752,7 +753,7 @@ func (c *UIClient) createNewItem() {
 
 		fileData, err := ioutil.ReadFile(filePath)
 		if err != nil {
-			fmt.Printf("Ошибка чтения файла: %v\n", err)
+			log.Printf("Ошибка чтения файла: %v\n", err)
 			return
 		}
 
@@ -817,7 +818,7 @@ func (c *UIClient) createNewItem() {
 
 	encryptedData, err := c.encryptData(data)
 	if err != nil {
-		fmt.Printf("Ошибка шифрования данных: %v\n", err)
+		log.Printf("Ошибка шифрования данных: %v\n", err)
 		return
 	}
 
@@ -828,13 +829,13 @@ func (c *UIClient) createNewItem() {
 		Metadata: metadata,
 	}
 
-	fmt.Println("Сохраняем данные на сервере...")
+	log.Println("Сохраняем данные на сервере...")
 	if err := c.SaveData(item); err != nil {
-		fmt.Printf("Ошибка сохранения: %v\n", err)
+		log.Printf("Ошибка сохранения: %v\n", err)
 		return
 	}
 
-	fmt.Println("Данные успешно сохранены!")
+	log.Println("Данные успешно сохранены!")
 }
 
 // encryptData шифрует данные.

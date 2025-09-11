@@ -9,7 +9,7 @@
 package server
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -17,12 +17,14 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // MigrationManager управляет применением миграций базы данных.
 // Отслеживает примененные миграции и обеспечивает их идемпотентность.
 type MigrationManager struct {
-	db            *sql.DB
+	db            *pgxpool.Pool
 	migrationsDir string
 }
 
@@ -36,7 +38,7 @@ type MigrationManager struct {
 // Returns:
 //
 //	*MigrationManager - новый экземпляр менеджера
-func NewMigrationManager(db *sql.DB, migrationsDir string) *MigrationManager {
+func NewMigrationManager(db *pgxpool.Pool, migrationsDir string) *MigrationManager {
 	return &MigrationManager{
 		db:            db,
 		migrationsDir: migrationsDir,
@@ -100,13 +102,14 @@ func (m *MigrationManager) RunMigrations() error {
 //	    applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 //	)
 func (m *MigrationManager) createMigrationsTable() error {
-	_, err := m.db.Exec(`
-		CREATE TABLE IF NOT EXISTS migrations (
+	_, err := m.db.Exec(
+		context.Background(),
+		`CREATE TABLE IF NOT EXISTS migrations (
 			id SERIAL PRIMARY KEY,
 			name VARCHAR(255) NOT NULL UNIQUE,
 			applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		)
-	`)
+		)`,
+	)
 	return err
 }
 
@@ -117,7 +120,7 @@ func (m *MigrationManager) createMigrationsTable() error {
 //	map[string]bool - карта имен примененных миграций
 //	error - ошибка запроса
 func (m *MigrationManager) getAppliedMigrations() (map[string]bool, error) {
-	rows, err := m.db.Query("SELECT name FROM migrations ORDER BY name")
+	rows, err := m.db.Query(context.Background(), "SELECT name FROM migrations ORDER BY name")
 	if err != nil {
 		return nil, err
 	}
@@ -178,13 +181,13 @@ func (m *MigrationManager) applyMigration(migrationName string) error {
 		return fmt.Errorf("failed to read migration file %s: %v", migrationName, err)
 	}
 
-	tx, err := m.db.Begin()
+	tx, err := m.db.Begin(context.Background())
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(context.Background())
 
-	if _, err := tx.Exec(string(content)); err != nil {
+	if _, err := tx.Exec(context.Background(), string(content)); err != nil {
 		if strings.Contains(err.Error(), "already exists") {
 			log.Printf("Migration %s: some objects already exist, continuing", migrationName)
 		} else {
@@ -192,7 +195,11 @@ func (m *MigrationManager) applyMigration(migrationName string) error {
 		}
 	}
 
-	_, err = tx.Exec("INSERT INTO migrations (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", migrationName)
+	_, err = tx.Exec(
+		context.Background(),
+		"INSERT INTO migrations (name) VALUES ($1) ON CONFLICT (name) DO NOTHING",
+		migrationName,
+	)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
 			log.Printf("Migration %s already recorded", migrationName)
@@ -201,5 +208,5 @@ func (m *MigrationManager) applyMigration(migrationName string) error {
 		}
 	}
 
-	return tx.Commit()
+	return tx.Commit(context.Background())
 }

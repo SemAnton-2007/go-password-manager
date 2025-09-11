@@ -8,7 +8,7 @@
 package server
 
 import (
-	"database/sql"
+	"context"
 	"encoding/json"
 	"log"
 	"path/filepath"
@@ -17,11 +17,12 @@ import (
 	"password-manager/internal/common/crypto"
 	"password-manager/internal/common/protocol"
 
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Database struct {
-	db *sql.DB
+	db *pgxpool.Pool
 }
 
 // NewDatabase создает новое подключение к базе данных.
@@ -39,16 +40,21 @@ type Database struct {
 //
 //	db, err := NewDatabase("host=localhost user=postgres dbname=test")
 func NewDatabase(connStr string) (*Database, error) {
-	db, err := sql.Open("postgres", connStr)
+	config, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := db.Ping(); err != nil {
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
+	if err != nil {
 		return nil, err
 	}
 
-	return &Database{db: db}, nil
+	if err := pool.Ping(context.Background()); err != nil {
+		return nil, err
+	}
+
+	return &Database{db: pool}, nil
 }
 
 // Close закрывает подключение к базе данных.
@@ -57,7 +63,8 @@ func NewDatabase(connStr string) (*Database, error) {
 //
 //	error - ошибка закрытия соединения
 func (d *Database) Close() error {
-	return d.db.Close()
+	d.db.Close()
+	return nil
 }
 
 // RunMigrations выполняет миграции базы данных.
@@ -94,6 +101,7 @@ func (d *Database) CreateUser(username, password string) error {
 	}
 
 	_, err = d.db.Exec(
+		context.Background(),
 		"INSERT INTO users (username, password_hash, password_salt) VALUES ($1, $2, $3)",
 		username, hash, salt,
 	)
@@ -114,12 +122,13 @@ func (d *Database) CreateUser(username, password string) error {
 func (d *Database) AuthenticateUser(username, password string) (bool, error) {
 	var hash, salt string
 	err := d.db.QueryRow(
+		context.Background(),
 		"SELECT password_hash, password_salt FROM users WHERE username = $1",
 		username,
 	).Scan(&hash, &salt)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return false, nil
 		}
 		return false, err
@@ -141,6 +150,7 @@ func (d *Database) AuthenticateUser(username, password string) (bool, error) {
 func (d *Database) GetUserID(username string) (int, error) {
 	var userID int
 	err := d.db.QueryRow(
+		context.Background(),
 		"SELECT id FROM users WHERE username = $1",
 		username,
 	).Scan(&userID)
@@ -166,24 +176,13 @@ func (d *Database) StoreData(userID int, item protocol.NewDataItem) error {
 
 	log.Printf("Storing data for user %d: type=%d, name=%s, data_len=%d", userID, item.Type, item.Name, len(item.Data))
 
-	result, err := d.db.Exec(`
-		INSERT INTO user_data (user_id, data_type, name, data, metadata)
-		VALUES ($1, $2, $3, $4, $5)
-	`, userID, item.Type, item.Name, item.Data, metadataJSON)
+	_, err = d.db.Exec(
+		context.Background(),
+		"INSERT INTO user_data (user_id, data_type, name, data, metadata) VALUES ($1, $2, $3, $4, $5)",
+		userID, item.Type, item.Name, item.Data, metadataJSON,
+	)
 
-	if err != nil {
-		log.Printf("SQL error: %v", err)
-		return err
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		log.Printf("Error getting rows affected: %v", err)
-	} else {
-		log.Printf("Rows affected: %d", rowsAffected)
-	}
-
-	return nil
+	return err
 }
 
 // GetData возвращает элементы данных пользователя, измененные после указанного времени.
@@ -198,12 +197,14 @@ func (d *Database) StoreData(userID int, item protocol.NewDataItem) error {
 //	[]DataItem - список элементов данных
 //	error      - ошибка запроса
 func (d *Database) GetData(userID int, lastSync time.Time) ([]protocol.DataItem, error) {
-	rows, err := d.db.Query(`
-		SELECT id, data_type, name, data, metadata, created_at, updated_at
-		FROM user_data
-		WHERE user_id = $1 AND updated_at > $2
-		ORDER BY updated_at
-	`, userID, lastSync)
+	rows, err := d.db.Query(
+		context.Background(),
+		`SELECT id, data_type, name, data, metadata, created_at, updated_at
+		 FROM user_data
+		 WHERE user_id = $1 AND updated_at > $2
+		 ORDER BY updated_at`,
+		userID, lastSync,
+	)
 
 	if err != nil {
 		return nil, err
@@ -248,11 +249,13 @@ func (d *Database) GetDataByID(userID int, itemID string) (protocol.DataItem, er
 	var item protocol.DataItem
 	var metadataJSON []byte
 
-	err := d.db.QueryRow(`
-		SELECT id, data_type, name, data, metadata, created_at, updated_at
-		FROM user_data
-		WHERE user_id = $1 AND id = $2
-	`, userID, itemID).Scan(
+	err := d.db.QueryRow(
+		context.Background(),
+		`SELECT id, data_type, name, data, metadata, created_at, updated_at
+		 FROM user_data
+		 WHERE user_id = $1 AND id = $2`,
+		userID, itemID,
+	).Scan(
 		&item.ID, &item.Type, &item.Name, &item.Data, &metadataJSON,
 		&item.CreatedAt, &item.UpdatedAt,
 	)
@@ -280,6 +283,7 @@ func (d *Database) GetDataByID(userID int, itemID string) (protocol.DataItem, er
 //	error - ошибка удаления
 func (d *Database) DeleteData(userID int, itemID string) error {
 	_, err := d.db.Exec(
+		context.Background(),
 		"DELETE FROM user_data WHERE user_id = $1 AND id = $2",
 		userID, itemID,
 	)
@@ -306,11 +310,13 @@ func (d *Database) UpdateData(userID int, itemID string, item protocol.NewDataIt
 	log.Printf("Updating data for user %d, item %s: type=%d, name=%s, data_len=%d",
 		userID, itemID, item.Type, item.Name, len(item.Data))
 
-	_, err = d.db.Exec(`
-		UPDATE user_data 
-		SET data_type = $1, name = $2, data = $3, metadata = $4, updated_at = CURRENT_TIMESTAMP
-		WHERE user_id = $5 AND id = $6
-	`, item.Type, item.Name, item.Data, metadataJSON, userID, itemID)
+	_, err = d.db.Exec(
+		context.Background(),
+		`UPDATE user_data
+		 SET data_type = $1, name = $2, data = $3, metadata = $4, updated_at = CURRENT_TIMESTAMP
+		 WHERE user_id = $5 AND id = $6`,
+		item.Type, item.Name, item.Data, metadataJSON, userID, itemID,
+	)
 
 	return err
 }

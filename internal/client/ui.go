@@ -61,6 +61,18 @@ func NewUIClient(host string, port int) *UIClient {
 	}
 }
 
+// readInput читает ввод с обработкой ошибок
+func (c *UIClient) readInput(prompt string) (string, error) {
+	if prompt != "" {
+		fmt.Print(prompt)
+	}
+	input, err := c.reader.ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("ошибка чтения ввода: %v", err)
+	}
+	return strings.TrimSpace(input), nil
+}
+
 // Run запускает интерактивный клиентский интерфейс.
 //
 // Process:
@@ -72,20 +84,24 @@ func (c *UIClient) Run() error {
 	log.Println("=== Password Manager Client ===")
 
 	// Запрос параметров подключения
-	fmt.Print("Введите адрес сервера [localhost]: ")
-	host, _ := c.reader.ReadString('\n')
-	host = strings.TrimSpace(host)
+	host, err := c.readInput("Введите адрес сервера [localhost]: ")
+	if err != nil {
+		return err
+	}
 	if host == "" {
 		host = "localhost"
 	}
 
-	fmt.Print("Введите порт сервера [8080]: ")
-	portStr, _ := c.reader.ReadString('\n')
-	portStr = strings.TrimSpace(portStr)
+	portStr, err := c.readInput("Введите порт сервера [8080]: ")
+	if err != nil {
+		return err
+	}
 	port := 8080
 	if portStr != "" {
 		if p, err := strconv.Atoi(portStr); err == nil {
 			port = p
+		} else {
+			log.Printf("Неверный формат порта, используется значение по умолчанию 8080")
 		}
 	}
 
@@ -114,10 +130,10 @@ func (c *UIClient) handleAuth() error {
 	fmt.Println("\nВыберите тип пользователя:")
 	fmt.Println("1. Новый пользователь")
 	fmt.Println("2. Зарегистрированный пользователь")
-	fmt.Print("Ваш выбор [1]: ")
-
-	choice, _ := c.reader.ReadString('\n')
-	choice = strings.TrimSpace(choice)
+	choice, err := c.readInput("Ваш выбор [1]: ")
+	if err != nil {
+		return err
+	}
 	if choice == "" {
 		choice = "1"
 	}
@@ -134,16 +150,18 @@ func (c *UIClient) handleAuth() error {
 
 // handleRegistration обрабатывает регистрацию нового пользователя
 func (c *UIClient) handleRegistration() error {
-	fmt.Print("Введите логин: ")
-	username, _ := c.reader.ReadString('\n')
-	username = strings.TrimSpace(username)
+	username, err := c.readInput("Введите логин: ")
+	if err != nil {
+		return fmt.Errorf("ошибка чтения логина: %v", err)
+	}
 	if username == "" {
 		return fmt.Errorf("логин не может быть пустым")
 	}
 
-	fmt.Print("Введите пароль: ")
-	password, _ := c.reader.ReadString('\n')
-	password = strings.TrimSpace(password)
+	password, err := c.readInput("Введите пароль: ")
+	if err != nil {
+		return fmt.Errorf("ошибка чтения пароля: %v", err)
+	}
 	if password == "" {
 		return fmt.Errorf("пароль не может быть пустым")
 	}
@@ -160,16 +178,18 @@ func (c *UIClient) handleRegistration() error {
 // handleLogin обрабатывает вход существующего пользователя
 func (c *UIClient) handleLogin() error {
 	fmt.Println("\n=== Авторизация ===")
-	fmt.Print("Введите логин: ")
-	username, _ := c.reader.ReadString('\n')
-	username = strings.TrimSpace(username)
+	username, err := c.readInput("Введите логин: ")
+	if err != nil {
+		return fmt.Errorf("ошибка чтения логина: %v", err)
+	}
 	if username == "" {
 		return fmt.Errorf("логин не может быть пустым")
 	}
 
-	fmt.Print("Введите пароль: ")
-	password, _ := c.reader.ReadString('\n')
-	password = strings.TrimSpace(password)
+	password, err := c.readInput("Введите пароль: ")
+	if err != nil {
+		return fmt.Errorf("ошибка чтения пароля: %v", err)
+	}
 	if password == "" {
 		return fmt.Errorf("пароль не может быть пустым")
 	}
@@ -204,10 +224,11 @@ func (c *UIClient) mainMenu() {
 		fmt.Println("1. Показать мои данные")
 		fmt.Println("2. Создать новый элемент")
 		fmt.Println("3. Выйти")
-		fmt.Print("Ваш выбор [3]: ")
-
-		choice, _ := c.reader.ReadString('\n')
-		choice = strings.TrimSpace(choice)
+		choice, err := c.readInput("Ваш выбор [3]: ")
+		if err != nil {
+			log.Printf("Ошибка чтения ввода: %v", err)
+			continue
+		}
 		if choice == "" {
 			choice = "3"
 		}
@@ -238,7 +259,7 @@ func (c *UIClient) showData() {
 
 	items, err := c.SyncData(time.Time{})
 	if err != nil {
-		log.Printf("Ошибка синхронизации: %v\n", err)
+		log.Printf("Ошибка синхронизации: %v", err)
 		return
 	}
 
@@ -257,10 +278,11 @@ func (c *UIClient) showData() {
 	fmt.Println("\nДействия:")
 	fmt.Println("0. Вернуться назад")
 	fmt.Println("1-9. Показать детали элемента")
-	fmt.Print("Ваш выбор [0]: ")
-
-	choice, _ := c.reader.ReadString('\n')
-	choice = strings.TrimSpace(choice)
+	choice, err := c.readInput("Ваш выбор [0]: ")
+	if err != nil {
+		log.Printf("Ошибка чтения ввода: %v", err)
+		return
+	}
 	if choice == "" || choice == "0" {
 		return
 	}
@@ -314,7 +336,7 @@ func (c *UIClient) showItemDetails(item protocol.DataItem) {
 		// Для других типов данных дешифруем и показываем содержимое
 		decryptedData, err := c.decryptItemData(item)
 		if err != nil {
-			log.Printf("Ошибка декодирования: %v\n", err)
+			log.Printf("Ошибка декодирования: %v", err)
 			fmt.Print("Нажмите Enter для возврата...")
 			c.reader.ReadString('\n')
 			return
@@ -357,10 +379,11 @@ func (c *UIClient) showItemDetails(item protocol.DataItem) {
 	} else {
 		fmt.Println("2. Редактировать элемент")
 	}
-	fmt.Print("Ваш выбор [0]: ")
-
-	choice, _ := c.reader.ReadString('\n')
-	choice = strings.TrimSpace(choice)
+	choice, err := c.readInput("Ваш выбор [0]: ")
+	if err != nil {
+		log.Printf("Ошибка чтения ввода: %v", err)
+		return
+	}
 	if choice == "" || choice == "0" {
 		return
 	}
@@ -391,7 +414,7 @@ func (c *UIClient) downloadFile(item protocol.DataItem) {
 	log.Println("Загружаем файл...")
 	fileData, err := c.DownloadData(item.ID)
 	if err != nil {
-		log.Printf("Ошибка загрузки: %v\n", err)
+		log.Printf("Ошибка загрузки: %v", err)
 		fmt.Print("Нажмите Enter для возврата...")
 		c.reader.ReadString('\n')
 		return
@@ -399,7 +422,7 @@ func (c *UIClient) downloadFile(item protocol.DataItem) {
 
 	decryptedData, err := c.decryptData(fileData)
 	if err != nil {
-		log.Printf("Ошибка расшифровки: %v\n", err)
+		log.Printf("Ошибка расшифровки: %v", err)
 		fmt.Print("Нажмите Enter для возврата...")
 		c.reader.ReadString('\n')
 		return
@@ -410,23 +433,25 @@ func (c *UIClient) downloadFile(item protocol.DataItem) {
 		originalName = item.Name
 	}
 
-	fmt.Printf("Введите путь для сохранения файла [./%s]: ", originalName)
-	savePath, _ := c.reader.ReadString('\n')
-	savePath = strings.TrimSpace(savePath)
+	savePath, err := c.readInput(fmt.Sprintf("Введите путь для сохранения файла [./%s]: ", originalName))
+	if err != nil {
+		log.Printf("Ошибка чтения ввода: %v", err)
+		return
+	}
 	if savePath == "" {
 		savePath = "./" + originalName
 	}
 
 	dir := filepath.Dir(savePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		log.Printf("Ошибка создания директории: %v\n", err)
+		log.Printf("Ошибка создания директории: %v", err)
 		fmt.Print("Нажмите Enter для возврата...")
 		c.reader.ReadString('\n')
 		return
 	}
 
 	if err := ioutil.WriteFile(savePath, decryptedData, 0644); err != nil {
-		log.Printf("Ошибка сохранения файла: %v\n", err)
+		log.Printf("Ошибка сохранения файла: %v", err)
 		fmt.Print("Нажмите Enter для возврата...")
 		c.reader.ReadString('\n')
 		return
@@ -443,7 +468,7 @@ func (c *UIClient) editItem(item protocol.DataItem) {
 
 	decryptedData, err := c.decryptItemData(item)
 	if err != nil {
-		log.Printf("Ошибка декодирования: %v\n", err)
+		log.Printf("Ошибка декодирования: %v", err)
 		fmt.Print("Нажмите Enter для возврата...")
 		c.reader.ReadString('\n')
 		return
@@ -456,16 +481,20 @@ func (c *UIClient) editItem(item protocol.DataItem) {
 	case protocol.DataTypeLoginPassword:
 		var loginData map[string]string
 		if err := json.Unmarshal(decryptedData, &loginData); err == nil {
-			fmt.Printf("Текущий логин [%s]: ", loginData["login"])
-			login, _ := c.reader.ReadString('\n')
-			login = strings.TrimSpace(login)
+			login, err := c.readInput(fmt.Sprintf("Текущий логин [%s]: ", loginData["login"]))
+			if err != nil {
+				log.Printf("Ошибка чтения ввода: %v", err)
+				return
+			}
 			if login != "" {
 				loginData["login"] = login
 			}
 
-			fmt.Printf("Текущий пароль [%s]: ", loginData["password"])
-			password, _ := c.reader.ReadString('\n')
-			password = strings.TrimSpace(password)
+			password, err := c.readInput(fmt.Sprintf("Текущий пароль [%s]: ", loginData["password"]))
+			if err != nil {
+				log.Printf("Ошибка чтения ввода: %v", err)
+				return
+			}
 			if password != "" {
 				loginData["password"] = password
 			}
@@ -477,8 +506,11 @@ func (c *UIClient) editItem(item protocol.DataItem) {
 	case protocol.DataTypeText:
 		fmt.Printf("Текущий текст:\n%s\n", string(decryptedData))
 		fmt.Println("Введите новый текст (оставьте пустым для отмены):")
-		text, _ := c.reader.ReadString('\n')
-		text = strings.TrimSpace(text)
+		text, err := c.readInput("")
+		if err != nil {
+			log.Printf("Ошибка чтения ввода: %v", err)
+			return
+		}
 		if text != "" {
 			newData = text
 		} else {
@@ -489,30 +521,38 @@ func (c *UIClient) editItem(item protocol.DataItem) {
 	case protocol.DataTypeBankCard:
 		var cardData map[string]string
 		if err := json.Unmarshal(decryptedData, &cardData); err == nil {
-			fmt.Printf("Текущий номер карты [%s]: ", cardData["number"])
-			number, _ := c.reader.ReadString('\n')
-			number = strings.TrimSpace(number)
+			number, err := c.readInput(fmt.Sprintf("Текущий номер карты [%s]: ", cardData["number"]))
+			if err != nil {
+				log.Printf("Ошибка чтения ввода: %v", err)
+				return
+			}
 			if number != "" {
 				cardData["number"] = number
 			}
 
-			fmt.Printf("Текущий срок действия [%s]: ", cardData["expiry"])
-			expiry, _ := c.reader.ReadString('\n')
-			expiry = strings.TrimSpace(expiry)
+			expiry, err := c.readInput(fmt.Sprintf("Текущий срок действия [%s]: ", cardData["expiry"]))
+			if err != nil {
+				log.Printf("Ошибка чтения ввода: %v", err)
+				return
+			}
 			if expiry != "" {
 				cardData["expiry"] = expiry
 			}
 
-			fmt.Printf("Текущий CVV [%s]: ", cardData["cvv"])
-			cvv, _ := c.reader.ReadString('\n')
-			cvv = strings.TrimSpace(cvv)
+			cvv, err := c.readInput(fmt.Sprintf("Текущий CVV [%s]: ", cardData["cvv"]))
+			if err != nil {
+				log.Printf("Ошибка чтения ввода: %v", err)
+				return
+			}
 			if cvv != "" {
 				cardData["cvv"] = cvv
 			}
 
-			fmt.Printf("Текущий владелец [%s]: ", cardData["holder"])
-			holder, _ := c.reader.ReadString('\n')
-			holder = strings.TrimSpace(holder)
+			holder, err := c.readInput(fmt.Sprintf("Текущий владелец [%s]: ", cardData["holder"]))
+			if err != nil {
+				log.Printf("Ошибка чтения ввода: %v", err)
+				return
+			}
 			if holder != "" {
 				cardData["holder"] = holder
 			}
@@ -553,22 +593,26 @@ func (c *UIClient) editItem(item protocol.DataItem) {
 		fmt.Println("2. Удалить поле")
 		fmt.Println("3. Редактировать поле")
 	}
-	fmt.Println("0. Пропустить редактирование метаинформации")
-	fmt.Print("Ваш выбор [0]: ")
-
-	metaChoice, _ := c.reader.ReadString('\n')
-	metaChoice = strings.TrimSpace(metaChoice)
+	metaChoice, err := c.readInput("0. Пропустить редактирование метаинформации\nВаш выбор [0]: ")
+	if err != nil {
+		log.Printf("Ошибка чтения ввода: %v", err)
+		return
+	}
 
 	switch metaChoice {
 	case "1":
-		fmt.Print("Введите имя нового поля: ")
-		fieldName, _ := c.reader.ReadString('\n')
-		fieldName = strings.TrimSpace(fieldName)
+		fieldName, err := c.readInput("Введите имя нового поля: ")
+		if err != nil {
+			log.Printf("Ошибка чтения ввода: %v", err)
+			return
+		}
 
 		if fieldName != "" {
-			fmt.Print("Введите значение поля: ")
-			fieldValue, _ := c.reader.ReadString('\n')
-			fieldValue = strings.TrimSpace(fieldValue)
+			fieldValue, err := c.readInput("Введите значение поля: ")
+			if err != nil {
+				log.Printf("Ошибка чтения ввода: %v", err)
+				return
+			}
 
 			updatedMetadata[fieldName] = fieldValue
 			fmt.Printf("Добавлено поле: %s = %s\n", fieldName, fieldValue)
@@ -576,9 +620,11 @@ func (c *UIClient) editItem(item protocol.DataItem) {
 
 	case "2":
 		if len(updatedMetadata) > 0 {
-			fmt.Print("Введите имя поля для удаления: ")
-			fieldName, _ := c.reader.ReadString('\n')
-			fieldName = strings.TrimSpace(fieldName)
+			fieldName, err := c.readInput("Введите имя поля для удаления: ")
+			if err != nil {
+				log.Printf("Ошибка чтения ввода: %v", err)
+				return
+			}
 
 			if _, exists := updatedMetadata[fieldName]; exists {
 				delete(updatedMetadata, fieldName)
@@ -590,15 +636,19 @@ func (c *UIClient) editItem(item protocol.DataItem) {
 
 	case "3":
 		if len(updatedMetadata) > 0 {
-			fmt.Print("Введите имя поля для редактирования: ")
-			fieldName, _ := c.reader.ReadString('\n')
-			fieldName = strings.TrimSpace(fieldName)
+			fieldName, err := c.readInput("Введите имя поля для редактирования: ")
+			if err != nil {
+				log.Printf("Ошибка чтения ввода: %v", err)
+				return
+			}
 
 			if currentValue, exists := updatedMetadata[fieldName]; exists {
 				fmt.Printf("Текущее значение '%s': %s\n", fieldName, currentValue)
-				fmt.Print("Введите новое значение: ")
-				fieldValue, _ := c.reader.ReadString('\n')
-				fieldValue = strings.TrimSpace(fieldValue)
+				fieldValue, err := c.readInput("Введите новое значение: ")
+				if err != nil {
+					log.Printf("Ошибка чтения ввода: %v", err)
+					return
+				}
 
 				updatedMetadata[fieldName] = fieldValue
 				fmt.Printf("Поле '%s' обновлено: %s\n", fieldName, fieldValue)
@@ -614,7 +664,7 @@ func (c *UIClient) editItem(item protocol.DataItem) {
 
 	encryptedData, err := c.encryptData([]byte(newData))
 	if err != nil {
-		log.Printf("Ошибка шифрования данных: %v\n", err)
+		log.Printf("Ошибка шифрования данных: %v", err)
 		return
 	}
 
@@ -627,7 +677,7 @@ func (c *UIClient) editItem(item protocol.DataItem) {
 
 	log.Println("Обновляем данные на сервере...")
 	if err := c.UpdateData(item.ID, updatedItem); err != nil {
-		log.Printf("Ошибка обновления: %v\n", err)
+		log.Printf("Ошибка обновления: %v", err)
 	} else {
 		log.Println("Данные успешно обновлены!")
 	}
@@ -638,8 +688,11 @@ func (c *UIClient) editItem(item protocol.DataItem) {
 
 // deleteItem удаляет элемент данных
 func (c *UIClient) deleteItem(itemID string) {
-	fmt.Print("\nВы уверены, что хотите удалить этот элемент? (y/N): ")
-	confirm, _ := c.reader.ReadString('\n')
+	confirm, err := c.readInput("\nВы уверены, что хотите удалить этот элемент? (y/N): ")
+	if err != nil {
+		log.Printf("Ошибка чтения ввода: %v", err)
+		return
+	}
 	confirm = strings.TrimSpace(strings.ToLower(confirm))
 
 	if confirm != "y" && confirm != "yes" {
@@ -648,9 +701,9 @@ func (c *UIClient) deleteItem(itemID string) {
 	}
 
 	log.Println("Удаляем элемент...")
-	err := c.DeleteData(itemID)
+	err = c.DeleteData(itemID)
 	if err != nil {
-		log.Printf("Ошибка удаления: %v\n", err)
+		log.Printf("Ошибка удаления: %v", err)
 	} else {
 		log.Println("Элемент успешно удален!")
 	}
@@ -674,10 +727,11 @@ func (c *UIClient) createNewItem() {
 	fmt.Println("2. Текстовые данные")
 	fmt.Println("3. Бинарные данные (файл)")
 	fmt.Println("4. Банковская карта")
-	fmt.Print("Ваш выбор [1]: ")
-
-	typeChoice, _ := c.reader.ReadString('\n')
-	typeChoice = strings.TrimSpace(typeChoice)
+	typeChoice, err := c.readInput("Ваш выбор [1]: ")
+	if err != nil {
+		log.Printf("Ошибка чтения ввода: %v", err)
+		return
+	}
 	if typeChoice == "" {
 		typeChoice = "1"
 	}
@@ -697,9 +751,11 @@ func (c *UIClient) createNewItem() {
 		return
 	}
 
-	fmt.Print("Введите название элемента: ")
-	name, _ := c.reader.ReadString('\n')
-	name = strings.TrimSpace(name)
+	name, err := c.readInput("Введите название элемента: ")
+	if err != nil {
+		log.Printf("Ошибка чтения ввода: %v", err)
+		return
+	}
 	if name == "" {
 		fmt.Println("Название не может быть пустым")
 		return
@@ -710,13 +766,17 @@ func (c *UIClient) createNewItem() {
 
 	switch dataType {
 	case protocol.DataTypeLoginPassword:
-		fmt.Print("Введите логин: ")
-		login, _ := c.reader.ReadString('\n')
-		login = strings.TrimSpace(login)
+		login, err := c.readInput("Введите логин: ")
+		if err != nil {
+			log.Printf("Ошибка чтения ввода: %v", err)
+			return
+		}
 
-		fmt.Print("Введите пароль: ")
-		password, _ := c.reader.ReadString('\n')
-		password = strings.TrimSpace(password)
+		password, err := c.readInput("Введите пароль: ")
+		if err != nil {
+			log.Printf("Ошибка чтения ввода: %v", err)
+			return
+		}
 
 		loginData := map[string]string{
 			"login":    login,
@@ -726,15 +786,19 @@ func (c *UIClient) createNewItem() {
 		data = jsonData
 
 	case protocol.DataTypeText:
-		fmt.Print("Введите текст: ")
-		text, _ := c.reader.ReadString('\n')
-		text = strings.TrimSpace(text)
+		text, err := c.readInput("Введите текст: ")
+		if err != nil {
+			log.Printf("Ошибка чтения ввода: %v", err)
+			return
+		}
 		data = []byte(text)
 
 	case protocol.DataTypeBinary:
-		fmt.Print("Введите путь к файлу: ")
-		filePath, _ := c.reader.ReadString('\n')
-		filePath = strings.TrimSpace(filePath)
+		filePath, err := c.readInput("Введите путь к файлу: ")
+		if err != nil {
+			log.Printf("Ошибка чтения ввода: %v", err)
+			return
+		}
 		if filePath == "" {
 			fmt.Println("Путь к файлу не может быть пустым")
 			return
@@ -742,7 +806,7 @@ func (c *UIClient) createNewItem() {
 
 		fileInfo, err := os.Stat(filePath)
 		if err != nil {
-			log.Printf("Ошибка получения информации о файле: %v\n", err)
+			log.Printf("Ошибка получения информации о файле: %v", err)
 			return
 		}
 
@@ -753,7 +817,7 @@ func (c *UIClient) createNewItem() {
 
 		fileData, err := ioutil.ReadFile(filePath)
 		if err != nil {
-			log.Printf("Ошибка чтения файла: %v\n", err)
+			log.Printf("Ошибка чтения файла: %v", err)
 			return
 		}
 
@@ -764,21 +828,29 @@ func (c *UIClient) createNewItem() {
 		metadata[protocol.MetaFileExtension] = filepath.Ext(filePath)
 
 	case protocol.DataTypeBankCard:
-		fmt.Print("Введите номер карты: ")
-		cardNumber, _ := c.reader.ReadString('\n')
-		cardNumber = strings.TrimSpace(cardNumber)
+		cardNumber, err := c.readInput("Введите номер карты: ")
+		if err != nil {
+			log.Printf("Ошибка чтения ввода: %v", err)
+			return
+		}
 
-		fmt.Print("Введите срок действия (MM/YY): ")
-		expiry, _ := c.reader.ReadString('\n')
-		expiry = strings.TrimSpace(expiry)
+		expiry, err := c.readInput("Введите срок действия (MM/YY): ")
+		if err != nil {
+			log.Printf("Ошибка чтения ввода: %v", err)
+			return
+		}
 
-		fmt.Print("Введите CVV: ")
-		cvv, _ := c.reader.ReadString('\n')
-		cvv = strings.TrimSpace(cvv)
+		cvv, err := c.readInput("Введите CVV: ")
+		if err != nil {
+			log.Printf("Ошибка чтения ввода: %v", err)
+			return
+		}
 
-		fmt.Print("Введите имя владельца: ")
-		holder, _ := c.reader.ReadString('\n')
-		holder = strings.TrimSpace(holder)
+		holder, err := c.readInput("Введите имя владельца: ")
+		if err != nil {
+			log.Printf("Ошибка чтения ввода: %v", err)
+			return
+		}
 
 		cardData := map[string]string{
 			"number": cardNumber,
@@ -790,35 +862,45 @@ func (c *UIClient) createNewItem() {
 		data = jsonData
 	}
 
-	fmt.Print("Хотите добавить дополнительное поле? Y/n: ")
-	addMore, _ := c.reader.ReadString('\n')
+	addMore, err := c.readInput("Хотите добавить дополнительное поле? Y/n: ")
+	if err != nil {
+		log.Printf("Ошибка чтения ввода: %v", err)
+		return
+	}
 	addMore = strings.TrimSpace(strings.ToLower(addMore))
 
 	for addMore == "y" || addMore == "yes" {
-		fmt.Print("Введите имя поля: ")
-		fieldName, _ := c.reader.ReadString('\n')
-		fieldName = strings.TrimSpace(fieldName)
+		fieldName, err := c.readInput("Введите имя поля: ")
+		if err != nil {
+			log.Printf("Ошибка чтения ввода: %v", err)
+			return
+		}
 
 		if fieldName == "" {
 			fmt.Println("Имя поля не может быть пустым")
 			continue
 		}
 
-		fmt.Print("Введите значение поля: ")
-		fieldValue, _ := c.reader.ReadString('\n')
-		fieldValue = strings.TrimSpace(fieldValue)
+		fieldValue, err := c.readInput("Введите значение поля: ")
+		if err != nil {
+			log.Printf("Ошибка чтения ввода: %v", err)
+			return
+		}
 
 		metadata[fieldName] = fieldValue
 		fmt.Printf("Добавлено поле: %s = %s\n", fieldName, fieldValue)
 
-		fmt.Print("Хотите добавить еще одно поле? Y/n: ")
-		addMore, _ = c.reader.ReadString('\n')
+		addMore, err = c.readInput("Хотите добавить еще одно поле? Y/n: ")
+		if err != nil {
+			log.Printf("Ошибка чтения ввода: %v", err)
+			return
+		}
 		addMore = strings.TrimSpace(strings.ToLower(addMore))
 	}
 
 	encryptedData, err := c.encryptData(data)
 	if err != nil {
-		log.Printf("Ошибка шифрования данных: %v\n", err)
+		log.Printf("Ошибка шифрования данных: %v", err)
 		return
 	}
 
@@ -831,7 +913,7 @@ func (c *UIClient) createNewItem() {
 
 	log.Println("Сохраняем данные на сервере...")
 	if err := c.SaveData(item); err != nil {
-		log.Printf("Ошибка сохранения: %v\n", err)
+		log.Printf("Ошибка сохранения: %v", err)
 		return
 	}
 

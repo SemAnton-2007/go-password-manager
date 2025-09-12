@@ -60,26 +60,26 @@ func NewMigrationManager(db *pgxpool.Pool, migrationsDir string) *MigrationManag
 func (m *MigrationManager) RunMigrations() error {
 	// Создаем таблицу миграций если она не существует
 	if err := m.createMigrationsTable(); err != nil {
-		return fmt.Errorf("failed to create migrations table: %v", err)
+		return fmt.Errorf("failed to create migrations table: %w", err)
 	}
 
 	// Получаем список уже примененных миграций
 	appliedMigrations, err := m.getAppliedMigrations()
 	if err != nil {
-		return fmt.Errorf("failed to get applied migrations: %v", err)
+		return fmt.Errorf("failed to get applied migrations: %w", err)
 	}
 
 	// Получаем список всех доступных миграций
 	availableMigrations, err := m.getAvailableMigrations()
 	if err != nil {
-		return fmt.Errorf("failed to get available migrations: %v", err)
+		return fmt.Errorf("failed to get available migrations: %w", err)
 	}
 
 	// Применяем миграции которые еще не были применены
 	for _, migration := range availableMigrations {
 		if _, exists := appliedMigrations[migration]; !exists {
 			if err := m.applyMigration(migration); err != nil {
-				return fmt.Errorf("failed to apply migration %s: %v", migration, err)
+				return fmt.Errorf("failed to apply migration %s: %w", migration, err)
 			}
 			log.Printf("Applied migration: %s", migration)
 		}
@@ -92,7 +92,7 @@ func (m *MigrationManager) RunMigrations() error {
 //
 // Returns:
 //
-//	error - ошибка создания таблицы
+//	error - ошибка создания таблиции
 //
 // Table schema:
 //
@@ -148,7 +148,7 @@ func (m *MigrationManager) getAvailableMigrations() ([]string, error) {
 	files, err := ioutil.ReadDir(m.migrationsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("migrations directory '%s' does not exist", m.migrationsDir)
+			return nil, fmt.Errorf("migrations directory '%s' does not exist: %w", m.migrationsDir, err)
 		}
 		return nil, err
 	}
@@ -178,7 +178,7 @@ func (m *MigrationManager) applyMigration(migrationName string) error {
 	filePath := filepath.Join(m.migrationsDir, migrationName)
 	content, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to read migration file %s: %v", migrationName, err)
+		return fmt.Errorf("failed to read migration file %s: %w", migrationName, err)
 	}
 
 	tx, err := m.db.Begin(context.Background())
@@ -191,7 +191,7 @@ func (m *MigrationManager) applyMigration(migrationName string) error {
 		if strings.Contains(err.Error(), "already exists") {
 			log.Printf("Migration %s: some objects already exist, continuing", migrationName)
 		} else {
-			return fmt.Errorf("failed to execute migration %s: %v", migrationName, err)
+			return fmt.Errorf("failed to execute migration %s: %w", migrationName, err)
 		}
 	}
 

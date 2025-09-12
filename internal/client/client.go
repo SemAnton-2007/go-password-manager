@@ -56,7 +56,7 @@ func (c *Client) Connect() error {
 	addr := fmt.Sprintf("%s:%d", c.host, c.port)
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("failed to connect to server: %v", err)
+		return fmt.Errorf("failed to connect to server: %w", err)
 	}
 	c.conn = conn
 	return nil
@@ -84,30 +84,30 @@ func (c *Client) sendAndReceive(msgType uint8, data []byte) ([]byte, error) {
 	message := protocol.SerializeMessage(msgType, 1, data)
 	_, err := c.conn.Write(message)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send message: %v", err)
+		return nil, fmt.Errorf("failed to send message: %w", err)
 	}
 
 	headerBuf := make([]byte, 10)
 	_, err = io.ReadFull(c.conn, headerBuf)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read header: %v", err)
+		return nil, fmt.Errorf("failed to read header: %w", err)
 	}
 
 	header, err := protocol.DeserializeHeader(headerBuf)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse header: %v", err)
+		return nil, fmt.Errorf("failed to parse header: %w", err)
 	}
 
 	payload := make([]byte, header.Length)
 	_, err = io.ReadFull(c.conn, payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read payload: %v", err)
+		return nil, fmt.Errorf("failed to read payload: %w", err)
 	}
 
 	if header.Type == protocol.MsgTypeError {
 		errorResp, err := protocol.DeserializeErrorResponse(payload)
 		if err != nil {
-			return nil, fmt.Errorf("error response: failed to parse")
+			return nil, fmt.Errorf("error response: failed to parse: %w", err)
 		}
 		return nil, fmt.Errorf("server error: %s", errorResp.Message)
 	}
@@ -133,7 +133,7 @@ func (c *Client) Register(username, password string) error {
 
 	data, err := protocol.SerializeRegisterRequest(req)
 	if err != nil {
-		return fmt.Errorf("failed to serialize request: %v", err)
+		return fmt.Errorf("failed to serialize request: %w", err)
 	}
 
 	response, err := c.sendAndReceive(protocol.MsgTypeRegisterRequest, data)
@@ -143,7 +143,7 @@ func (c *Client) Register(username, password string) error {
 
 	resp, err := protocol.DeserializeRegisterResponse(response)
 	if err != nil {
-		return fmt.Errorf("failed to parse response: %v", err)
+		return fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	if !resp.Success {
@@ -171,7 +171,7 @@ func (c *Client) Login(username, password string) error {
 
 	data, err := protocol.SerializeAuthRequest(req)
 	if err != nil {
-		return fmt.Errorf("failed to serialize request: %v", err)
+		return fmt.Errorf("failed to serialize request: %w", err)
 	}
 
 	response, err := c.sendAndReceive(protocol.MsgTypeAuthRequest, data)
@@ -181,7 +181,7 @@ func (c *Client) Login(username, password string) error {
 
 	resp, err := protocol.DeserializeAuthResponse(response)
 	if err != nil {
-		return fmt.Errorf("failed to parse response: %v", err)
+		return fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	if !resp.Success {
@@ -214,7 +214,7 @@ func (c *Client) SyncData(lastSync time.Time) ([]protocol.DataItem, error) {
 
 	data, err := protocol.SerializeSyncRequest(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to serialize request: %v", err)
+		return nil, fmt.Errorf("failed to serialize request: %w", err)
 	}
 
 	response, err := c.sendAndReceive(protocol.MsgTypeSyncRequest, data)
@@ -224,7 +224,7 @@ func (c *Client) SyncData(lastSync time.Time) ([]protocol.DataItem, error) {
 
 	resp, err := protocol.DeserializeSyncResponse(response)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse response: %v", err)
+		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	return resp.Items, nil
@@ -250,7 +250,7 @@ func (c *Client) SaveData(item protocol.NewDataItem) error {
 
 	data, err := protocol.SerializeSaveDataRequest(req)
 	if err != nil {
-		return fmt.Errorf("failed to serialize request: %v", err)
+		return fmt.Errorf("failed to serialize request: %w", err)
 	}
 
 	response, err := c.sendAndReceive(protocol.MsgTypeSaveDataRequest, data)
@@ -260,7 +260,7 @@ func (c *Client) SaveData(item protocol.NewDataItem) error {
 
 	resp, err := protocol.DeserializeSaveDataResponse(response)
 	if err != nil {
-		return fmt.Errorf("failed to parse response: %v", err)
+		return fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	if !resp.Success {
@@ -308,7 +308,7 @@ func (c *Client) DeleteData(itemID string) error {
 
 	data, err := protocol.SerializeDeleteDataRequest(req)
 	if err != nil {
-		return fmt.Errorf("failed to serialize request: %v", err)
+		return fmt.Errorf("failed to serialize request: %w", err)
 	}
 
 	response, err := c.sendAndReceive(protocol.MsgTypeDeleteDataRequest, data)
@@ -318,7 +318,7 @@ func (c *Client) DeleteData(itemID string) error {
 
 	resp, err := protocol.DeserializeDeleteDataResponse(response)
 	if err != nil {
-		return fmt.Errorf("failed to parse response: %v", err)
+		return fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	if !resp.Success {
@@ -350,7 +350,7 @@ func (c *Client) UpdateData(itemID string, item protocol.NewDataItem) error {
 
 	data, err := protocol.SerializeUpdateDataRequest(req)
 	if err != nil {
-		return fmt.Errorf("failed to serialize request: %v", err)
+		return fmt.Errorf("failed to serialize request: %w", err)
 	}
 
 	response, err := c.sendAndReceive(protocol.MsgTypeUpdateDataRequest, data)
@@ -360,7 +360,7 @@ func (c *Client) UpdateData(itemID string, item protocol.NewDataItem) error {
 
 	resp, err := protocol.DeserializeUpdateDataResponse(response)
 	if err != nil {
-		return fmt.Errorf("failed to parse response: %v", err)
+		return fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	if !resp.Success {
@@ -391,7 +391,7 @@ func (c *Client) DownloadData(itemID string) ([]byte, error) {
 
 	data, err := protocol.SerializeDownloadRequest(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to serialize request: %v", err)
+		return nil, fmt.Errorf("failed to serialize request: %w", err)
 	}
 
 	response, err := c.sendAndReceive(protocol.MsgTypeDownloadRequest, data)
@@ -401,7 +401,7 @@ func (c *Client) DownloadData(itemID string) ([]byte, error) {
 
 	resp, err := protocol.DeserializeDownloadResponse(response)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse response: %v", err)
+		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	if !resp.Success {

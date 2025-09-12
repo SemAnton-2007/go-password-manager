@@ -43,11 +43,11 @@ type Server struct {
 func NewServer(host string, port int, dbConnStr string) (*Server, error) {
 	db, err := NewDatabase(dbConnStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %v", err)
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	if err := db.RunMigrations(); err != nil {
-		return nil, fmt.Errorf("failed to run migrations: %v", err)
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	return &Server{
@@ -66,7 +66,7 @@ func (s *Server) Start() error {
 	addr := net.JoinHostPort(s.host, strconv.Itoa(s.port))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("failed to start server: %v", err)
+		return fmt.Errorf("failed to start server: %w", err)
 	}
 	defer listener.Close()
 

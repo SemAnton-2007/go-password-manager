@@ -68,7 +68,7 @@ func (c *UIClient) readInput(prompt string) (string, error) {
 	}
 	input, err := c.reader.ReadString('\n')
 	if err != nil {
-		return "", fmt.Errorf("ошибка чтения ввода: %v", err)
+		return "", fmt.Errorf("ошибка чтения ввода: %w", err)
 	}
 	return strings.TrimSpace(input), nil
 }
@@ -111,7 +111,7 @@ func (c *UIClient) Run() error {
 
 	log.Printf("Попытка подключения к %s:%d...\n", host, port)
 	if err := c.Connect(); err != nil {
-		return fmt.Errorf("ошибка подключения: %v", err)
+		return fmt.Errorf("ошибка подключения: %w", err)
 	}
 	log.Println("Подключение успешно!")
 
@@ -152,7 +152,7 @@ func (c *UIClient) handleAuth() error {
 func (c *UIClient) handleRegistration() error {
 	username, err := c.readInput("Введите логин: ")
 	if err != nil {
-		return fmt.Errorf("ошибка чтения логина: %v", err)
+		return fmt.Errorf("ошибка чтения логина: %w", err)
 	}
 	if username == "" {
 		return fmt.Errorf("логин не может быть пустым")
@@ -160,7 +160,7 @@ func (c *UIClient) handleRegistration() error {
 
 	password, err := c.readInput("Введите пароль: ")
 	if err != nil {
-		return fmt.Errorf("ошибка чтения пароля: %v", err)
+		return fmt.Errorf("ошибка чтения пароля: %w", err)
 	}
 	if password == "" {
 		return fmt.Errorf("пароль не может быть пустым")
@@ -168,7 +168,7 @@ func (c *UIClient) handleRegistration() error {
 
 	log.Println("Регистрируем пользователя...")
 	if err := c.Register(username, password); err != nil {
-		return fmt.Errorf("ошибка регистрации: %v", err)
+		return fmt.Errorf("ошибка регистрации: %w", err)
 	}
 	log.Println("Регистрация успешна!")
 
@@ -180,7 +180,7 @@ func (c *UIClient) handleLogin() error {
 	fmt.Println("\n=== Авторизация ===")
 	username, err := c.readInput("Введите логин: ")
 	if err != nil {
-		return fmt.Errorf("ошибка чтения логина: %v", err)
+		return fmt.Errorf("ошибка чтения логина: %w", err)
 	}
 	if username == "" {
 		return fmt.Errorf("логин не может быть пустым")
@@ -188,7 +188,7 @@ func (c *UIClient) handleLogin() error {
 
 	password, err := c.readInput("Введите пароль: ")
 	if err != nil {
-		return fmt.Errorf("ошибка чтения пароля: %v", err)
+		return fmt.Errorf("ошибка чтения пароля: %w", err)
 	}
 	if password == "" {
 		return fmt.Errorf("пароль не может быть пустым")
@@ -201,7 +201,7 @@ func (c *UIClient) handleLogin() error {
 func (c *UIClient) handleLoginWithCredentials(username, password string) error {
 	log.Println("Авторизуем пользователя...")
 	if err := c.Login(username, password); err != nil {
-		return fmt.Errorf("ошибка авторизации: %v", err)
+		return fmt.Errorf("ошибка авторизации: %w", err)
 	}
 	log.Println("Авторизация успешна!")
 	return nil

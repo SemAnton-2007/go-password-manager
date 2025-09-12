@@ -1,6 +1,6 @@
 -- Миграция 001: Initial schema for Password Manager
 CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     username VARCHAR(255) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     password_salt TEXT NOT NULL,

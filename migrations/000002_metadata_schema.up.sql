@@ -1,6 +1,6 @@
 -- Миграция 002: Add support for arbitrary metadata
 CREATE TABLE IF NOT EXISTS data_metadata (
-    id SERIAL PRIMARY KEY,
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     data_id UUID REFERENCES user_data(id) ON DELETE CASCADE,
     key VARCHAR(255) NOT NULL,
     value_type SMALLINT NOT NULL, -- 1: text, 2: number, 3: boolean, 4: binary
@@ -17,7 +17,7 @@ CREATE INDEX IF NOT EXISTS idx_data_metadata_key ON data_metadata(key);
 
 -- Добавляем поддержку категорий для организации метаданных
 CREATE TABLE IF NOT EXISTS metadata_categories (
-    id SERIAL PRIMARY KEY,
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     description TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

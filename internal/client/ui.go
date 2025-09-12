@@ -736,7 +736,7 @@ func (c *UIClient) createNewItem() {
 		typeChoice = "1"
 	}
 
-	var dataType uint8
+	var dataType protocol.DataType
 	switch typeChoice {
 	case "1":
 		dataType = protocol.DataTypeLoginPassword
@@ -979,12 +979,12 @@ func (c *UIClient) deriveSimpleKey() []byte {
 //
 // Parameters:
 //
-//	dataType - числовой тип данных из протокола
+//	dataType - тип данных из протокола
 //
 // Returns:
 //
 //	string - читаемое имя типа данных
-func getDataTypeName(dataType uint8) string {
+func getDataTypeName(dataType protocol.DataType) string {
 	switch dataType {
 	case protocol.DataTypeLoginPassword:
 		return "Логин/Пароль"

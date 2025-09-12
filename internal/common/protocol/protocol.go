@@ -294,7 +294,7 @@ func DeserializeSyncResponse(data []byte) (SyncResponse, error) {
 func SerializeDataItem(item DataItem) ([]byte, error) {
 	type dataItem struct {
 		ID        string            `json:"id"`
-		Type      uint8             `json:"type"`
+		Type      DataType          `json:"type"`
 		Name      string            `json:"name"`
 		Data      []byte            `json:"data"`
 		Metadata  map[string]string `json:"metadata"`
@@ -328,7 +328,7 @@ func SerializeDataItem(item DataItem) ([]byte, error) {
 func DeserializeDataItem(data []byte) (DataItem, error) {
 	type dataItem struct {
 		ID        string            `json:"id"`
-		Type      uint8             `json:"type"`
+		Type      DataType          `json:"type"`
 		Name      string            `json:"name"`
 		Data      []byte            `json:"data"`
 		Metadata  map[string]string `json:"metadata"`
@@ -340,6 +340,11 @@ func DeserializeDataItem(data []byte) (DataItem, error) {
 	err := json.Unmarshal(data, &temp)
 	if err != nil {
 		return DataItem{}, err
+	}
+
+	// Валидация типа данных
+	if !temp.Type.IsValid() {
+		return DataItem{}, ErrInvalidDataType
 	}
 
 	createdAt, err := time.Parse(time.RFC3339Nano, temp.CreatedAt)
@@ -375,7 +380,7 @@ func DeserializeDataItem(data []byte) (DataItem, error) {
 //	error  - ошибка сериализации
 func SerializeSaveDataRequest(req SaveDataRequest) ([]byte, error) {
 	type tempDataItem struct {
-		Type     uint8             `json:"type"`
+		Type     DataType          `json:"type"`
 		Name     string            `json:"name"`
 		Data     []byte            `json:"data"`
 		Metadata map[string]string `json:"metadata"`
@@ -385,14 +390,16 @@ func SerializeSaveDataRequest(req SaveDataRequest) ([]byte, error) {
 		Item tempDataItem `json:"item"`
 	}
 
-	temp := tempDataItem{
-		Type:     req.Item.Type,
-		Name:     req.Item.Name,
-		Data:     req.Item.Data,
-		Metadata: req.Item.Metadata,
+	temp := tempRequest{
+		Item: tempDataItem{
+			Type:     req.Item.Type,
+			Name:     req.Item.Name,
+			Data:     req.Item.Data,
+			Metadata: req.Item.Metadata,
+		},
 	}
 
-	return json.Marshal(tempRequest{Item: temp})
+	return json.Marshal(temp)
 }
 
 // DeserializeSaveDataRequest десериализует запрос сохранения данных из JSON.
@@ -407,7 +414,7 @@ func SerializeSaveDataRequest(req SaveDataRequest) ([]byte, error) {
 //	error           - ошибка десериализации
 func DeserializeSaveDataRequest(data []byte) (SaveDataRequest, error) {
 	type tempDataItem struct {
-		Type     uint8             `json:"type"`
+		Type     DataType          `json:"type"`
 		Name     string            `json:"name"`
 		Data     []byte            `json:"data"`
 		Metadata map[string]string `json:"metadata"`
@@ -421,6 +428,11 @@ func DeserializeSaveDataRequest(data []byte) (SaveDataRequest, error) {
 	err := json.Unmarshal(data, &temp)
 	if err != nil {
 		return SaveDataRequest{}, err
+	}
+
+	// Валидация типа данных
+	if !temp.Item.Type.IsValid() {
+		return SaveDataRequest{}, ErrInvalidDataType
 	}
 
 	return SaveDataRequest{
@@ -565,7 +577,7 @@ func DeserializeDeleteDataResponse(data []byte) (DeleteDataResponse, error) {
 //	error  - ошибка сериализации
 func SerializeUpdateDataRequest(req UpdateDataRequest) ([]byte, error) {
 	type tempDataItem struct {
-		Type     uint8             `json:"type"`
+		Type     DataType          `json:"type"`
 		Name     string            `json:"name"`
 		Data     []byte            `json:"data"`
 		Metadata map[string]string `json:"metadata"`
@@ -601,7 +613,7 @@ func SerializeUpdateDataRequest(req UpdateDataRequest) ([]byte, error) {
 //	error             - ошибка десериализации
 func DeserializeUpdateDataRequest(data []byte) (UpdateDataRequest, error) {
 	type tempDataItem struct {
-		Type     uint8             `json:"type"`
+		Type     DataType          `json:"type"`
 		Name     string            `json:"name"`
 		Data     []byte            `json:"data"`
 		Metadata map[string]string `json:"metadata"`
@@ -616,6 +628,11 @@ func DeserializeUpdateDataRequest(data []byte) (UpdateDataRequest, error) {
 	err := json.Unmarshal(data, &temp)
 	if err != nil {
 		return UpdateDataRequest{}, err
+	}
+
+	// Валидация типа данных
+	if !temp.Item.Type.IsValid() {
+		return UpdateDataRequest{}, ErrInvalidDataType
 	}
 
 	return UpdateDataRequest{

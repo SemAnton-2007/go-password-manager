@@ -13,6 +13,7 @@ package protocol
 
 import (
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -54,17 +55,46 @@ const (
 	MsgTypeDownloadResponse = 0x10
 )
 
-// Типы данных, поддерживаемые системой
+// DataType представляет тип хранимых данных
+type DataType uint8
+
+// Константы типов данных
 const (
 	// DataTypeLoginPassword - учетные данные (логин/пароль)
-	DataTypeLoginPassword = 0x01
+	DataTypeLoginPassword DataType = 0x01
 	// DataTypeText - произвольные текстовые данные
-	DataTypeText = 0x02
+	DataTypeText DataType = 0x02
 	// DataTypeBinary - бинарные данные
-	DataTypeBinary = 0x03
+	DataTypeBinary DataType = 0x03
 	// DataTypeBankCard - данные банковских карт
-	DataTypeBankCard = 0x04
+	DataTypeBankCard DataType = 0x04
 )
+
+// IsValid проверяет валидность типа данных
+func (dt DataType) IsValid() bool {
+	switch dt {
+	case DataTypeLoginPassword, DataTypeText, DataTypeBinary, DataTypeBankCard:
+		return true
+	default:
+		return false
+	}
+}
+
+// String возвращает строковое представление типа данных
+func (dt DataType) String() string {
+	switch dt {
+	case DataTypeLoginPassword:
+		return "login_password"
+	case DataTypeText:
+		return "text"
+	case DataTypeBinary:
+		return "binary"
+	case DataTypeBankCard:
+		return "bank_card"
+	default:
+		return fmt.Sprintf("unknown(%d)", dt)
+	}
+}
 
 // Ключи метаданных для бинарных данных
 const (
@@ -83,6 +113,8 @@ var (
 	// ErrAuthFailed возвращается при неудачной аутентификации.
 	// Может быть вызвано неверными credentials или блокировкой аккаунта.
 	ErrAuthFailed = errors.New("authentication failed")
+	// ErrInvalidDataType возвращается при получении невалидного типа данных.
+	ErrInvalidDataType = errors.New("invalid data type")
 )
 
 // MessageHeader представляет заголовок сетевого сообщения.
@@ -126,7 +158,7 @@ type RegisterResponse struct {
 // Может содержать различные типы данных с метаинформацией.
 type DataItem struct {
 	ID        string
-	Type      uint8
+	Type      DataType
 	Name      string
 	Data      []byte
 	Metadata  map[string]string
@@ -137,7 +169,7 @@ type DataItem struct {
 // NewDataItem представляет новый элемент данных для создания.
 // Используется при добавлении новых записей.
 type NewDataItem struct {
-	Type     uint8
+	Type     DataType
 	Name     string
 	Data     []byte
 	Metadata map[string]string

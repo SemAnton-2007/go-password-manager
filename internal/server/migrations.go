@@ -1,28 +1,23 @@
 // Package migration предоставляет систему миграций базы данных для менеджера паролей.
 //
-// Миграции позволяют:
-// - Создавать и обновлять схему базы данных
-// - Управлять версиями схемы
-// - Автоматически применять изменения при обновлении
-//
+// Использует библиотеку github.com/golang-migrate/migrate/v4 для управления миграциями.
 // Миграции хранятся в виде SQL-файлов в директории migrations.
 package server
 
 import (
-	"context"
+	"database/sql"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 // MigrationManager управляет применением миграций базы данных.
-// Отслеживает примененные миграции и обеспечивает их идемпотентность.
 type MigrationManager struct {
 	db            *pgxpool.Pool
 	migrationsDir string
@@ -50,163 +45,57 @@ func NewMigrationManager(db *pgxpool.Pool, migrationsDir string) *MigrationManag
 // Returns:
 //
 //	error - ошибка применения миграций
-//
-// Process:
-//  1. Создает таблицу миграций если не существует
-//  2. Получает список уже примененных миграций
-//  3. Находит все доступные миграции в директории
-//  4. Применяет миграции в порядке их имен
-//  5. Записывает applied миграции в таблицу
 func (m *MigrationManager) RunMigrations() error {
-	// Создаем таблицу миграций если она не существует
-	if err := m.createMigrationsTable(); err != nil {
-		return fmt.Errorf("failed to create migrations table: %w", err)
-	}
-
-	// Получаем список уже примененных миграций
-	appliedMigrations, err := m.getAppliedMigrations()
+	absPath, err := filepath.Abs(m.migrationsDir)
 	if err != nil {
-		return fmt.Errorf("failed to get applied migrations: %w", err)
+		return fmt.Errorf("failed to get absolute path to migrations: %w", err)
 	}
 
-	// Получаем список всех доступных миграций
-	availableMigrations, err := m.getAvailableMigrations()
+	config := m.db.Config()
+	connStr := fmt.Sprintf("host=%s port=%d dbname=%s user=%s password=%s sslmode=disable",
+		config.ConnConfig.Host,
+		config.ConnConfig.Port,
+		config.ConnConfig.Database,
+		config.ConnConfig.User,
+		config.ConnConfig.Password,
+	)
+
+	sqlDB, err := sql.Open("pgx", connStr)
 	if err != nil {
-		return fmt.Errorf("failed to get available migrations: %w", err)
+		return fmt.Errorf("failed to create sql.DB connection: %w", err)
+	}
+	defer sqlDB.Close()
+
+	if err := sqlDB.Ping(); err != nil {
+		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Применяем миграции которые еще не были применены
-	for _, migration := range availableMigrations {
-		if _, exists := appliedMigrations[migration]; !exists {
-			if err := m.applyMigration(migration); err != nil {
-				return fmt.Errorf("failed to apply migration %s: %w", migration, err)
-			}
-			log.Printf("Applied migration: %s", migration)
-		}
+	driver, err := postgres.WithInstance(sqlDB, &postgres.Config{})
+	if err != nil {
+		return fmt.Errorf("failed to create database driver: %w", err)
+	}
+
+	migrator, err := migrate.NewWithDatabaseInstance(
+		fmt.Sprintf("file://%s", absPath),
+		"postgres",
+		driver,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create migrator: %w", err)
+	}
+	defer migrator.Close()
+
+	log.Println("Applying database migrations...")
+	err = migrator.Up()
+	if err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("failed to apply migrations: %w", err)
+	}
+
+	if err == migrate.ErrNoChange {
+		log.Println("No new migrations to apply")
+	} else {
+		log.Println("Migrations applied successfully")
 	}
 
 	return nil
-}
-
-// createMigrationsTable создает таблицу для отслеживания примененных миграций.
-//
-// Returns:
-//
-//	error - ошибка создания таблиции
-//
-// Table schema:
-//
-//	CREATE TABLE IF NOT EXISTS migrations (
-//	    id SERIAL PRIMARY KEY,
-//	    name VARCHAR(255) NOT NULL UNIQUE,
-//	    applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-//	)
-func (m *MigrationManager) createMigrationsTable() error {
-	_, err := m.db.Exec(
-		context.Background(),
-		`CREATE TABLE IF NOT EXISTS migrations (
-			id SERIAL PRIMARY KEY,
-			name VARCHAR(255) NOT NULL UNIQUE,
-			applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		)`,
-	)
-	return err
-}
-
-// getAppliedMigrations возвращает список уже примененных миграций.
-//
-// Returns:
-//
-//	map[string]bool - карта имен примененных миграций
-//	error - ошибка запроса
-func (m *MigrationManager) getAppliedMigrations() (map[string]bool, error) {
-	rows, err := m.db.Query(context.Background(), "SELECT name FROM migrations ORDER BY name")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	migrations := make(map[string]bool)
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		migrations[name] = true
-	}
-
-	return migrations, nil
-}
-
-// getAvailableMigrations возвращает список всех доступных миграций.
-//
-// Returns:
-//
-//	[]string - список имен файлов миграций
-//	error - ошибка чтения директории
-func (m *MigrationManager) getAvailableMigrations() ([]string, error) {
-	files, err := ioutil.ReadDir(m.migrationsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("migrations directory '%s' does not exist: %w", m.migrationsDir, err)
-		}
-		return nil, err
-	}
-
-	var migrations []string
-	for _, file := range files {
-		if !file.IsDir() && strings.HasSuffix(file.Name(), ".sql") {
-			migrations = append(migrations, file.Name())
-		}
-	}
-
-	// Сортируем миграции по имени
-	sort.Strings(migrations)
-	return migrations, nil
-}
-
-// applyMigration применяет конкретную миграцию к базе данных.
-//
-// Parameters:
-//
-//	migrationName - имя файла миграции
-//
-// Returns:
-//
-//	error - ошибка применения миграции
-func (m *MigrationManager) applyMigration(migrationName string) error {
-	filePath := filepath.Join(m.migrationsDir, migrationName)
-	content, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to read migration file %s: %w", migrationName, err)
-	}
-
-	tx, err := m.db.Begin(context.Background())
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(context.Background())
-
-	if _, err := tx.Exec(context.Background(), string(content)); err != nil {
-		if strings.Contains(err.Error(), "already exists") {
-			log.Printf("Migration %s: some objects already exist, continuing", migrationName)
-		} else {
-			return fmt.Errorf("failed to execute migration %s: %w", migrationName, err)
-		}
-	}
-
-	_, err = tx.Exec(
-		context.Background(),
-		"INSERT INTO migrations (name) VALUES ($1) ON CONFLICT (name) DO NOTHING",
-		migrationName,
-	)
-	if err != nil {
-		if strings.Contains(err.Error(), "duplicate key") {
-			log.Printf("Migration %s already recorded", migrationName)
-		} else {
-			return err
-		}
-	}
-
-	return tx.Commit(context.Background())
 }

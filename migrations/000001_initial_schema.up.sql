@@ -1,12 +1,4 @@
 -- Миграция 001: Initial schema for Password Manager
--- Создание базовых таблиц пользователей и данных
-
-CREATE TABLE IF NOT EXISTS migrations (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL UNIQUE,
-    applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(255) UNIQUE NOT NULL,
@@ -30,7 +22,3 @@ CREATE TABLE IF NOT EXISTS user_data (
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_user_data_user_id ON user_data(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_data_updated_at ON user_data(updated_at);
-
-INSERT INTO migrations (name) 
-SELECT '001_initial_schema.sql'
-WHERE NOT EXISTS (SELECT 1 FROM migrations WHERE name = '001_initial_schema.sql');

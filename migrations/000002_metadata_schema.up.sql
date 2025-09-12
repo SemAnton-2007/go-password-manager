@@ -28,7 +28,3 @@ CREATE TABLE IF NOT EXISTS data_metadata_categories (
     category_id INTEGER REFERENCES metadata_categories(id) ON DELETE CASCADE,
     PRIMARY KEY (metadata_id, category_id)
 );
-
-INSERT INTO migrations (name)
-SELECT '002_metadata_schema.sql'
-WHERE NOT EXISTS (SELECT 1 FROM migrations WHERE name = '002_metadata_schema.sql');
